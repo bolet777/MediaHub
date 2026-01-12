@@ -9,7 +9,7 @@
 
 ### User Story 1 - Create a New Library (Priority: P1)
 
-A user wants to set up their first MediaHub library to start organizing their photos and videos. They need to choose a location on disk and have MediaHub create a library structure that MediaHub can recognize and use.
+A user wants to start using MediaHub with a library on disk. They may create a new MediaHub library at a chosen location, or attach to an existing library folder previously created, without re-importing any photos or videos. MediaHub must be able to recognize the library structure on disk and use it as an active library.
 
 **Why this priority**: This is the foundational action that enables all other MediaHub functionality. Without the ability to create a library, users cannot begin using MediaHub.
 
@@ -21,12 +21,13 @@ A user wants to set up their first MediaHub library to start organizing their ph
 2. **Given** a user wants to create a library, **When** they specify a directory path that already contains files, **Then** MediaHub warns the user and requires confirmation before proceeding
 3. **Given** a user wants to create a library, **When** they specify a directory path that doesn't exist, **Then** MediaHub creates the directory structure and initializes the library
 4. **Given** a user creates a library, **When** they close and reopen MediaHub, **Then** MediaHub recognizes and can open the previously created library
+5. **Given** a user already has an existing library folder created by MediaHub, **When** they choose to attach/open that folder in MediaHub, **Then** MediaHub recognizes it as a valid library and makes it the active library without requiring any re-import of existing media
 
 ---
 
 ### User Story 2 - Open an Existing Library (Priority: P1)
 
-A user has created a MediaHub library and wants to open it again later, or switch between multiple libraries. MediaHub must be able to identify and open libraries that exist on disk.
+A user has created a MediaHub library and wants to open it again later, or switch between multiple libraries. MediaHub must be able to identify and open libraries that exist on disk. This includes libraries that were created by prior versions of the product (e.g., MediaVault) as long as they meet the library identification rules of this spec.
 
 **Why this priority**: Users need to access their existing libraries. This is equally foundational as creating libraries, as it enables the core workflow of using MediaHub with existing data.
 
@@ -60,6 +61,7 @@ MediaHub needs to uniquely identify each library to prevent conflicts, enable mu
 
 ### Edge Cases
 
+- What happens when a user points MediaHub at a MediaVault-created library that is missing some expected metadata files but still has the media folder structure?
 - What happens when a user attempts to create a library at a location that already contains a MediaHub library?
 - What happens when a library's identifying metadata is corrupted or missing?
 - How does MediaHub handle libraries on external drives that may be disconnected?
@@ -77,10 +79,11 @@ MediaHub needs to uniquely identify each library to prevent conflicts, enable mu
 - **FR-003**: MediaHub MUST assign a unique identifier to each library that persists across application restarts
 - **FR-004**: MediaHub MUST be able to discover and list all MediaHub libraries on accessible volumes
 - **FR-005**: MediaHub MUST be able to open an existing library by its unique identifier or path
+- **FR-005a**: MediaHub MUST be able to attach to (adopt) an existing library folder created by prior versions (e.g., MediaVault) without requiring re-import of existing media files
 - **FR-006**: MediaHub MUST maintain library identity even when the library directory is renamed or moved
 - **FR-007**: MediaHub MUST store library metadata in a transparent, human-readable format that does not require MediaHub to access
 - **FR-008**: MediaHub MUST validate library integrity when opening a library
-- **FR-009**: MediaHub MUST prevent creating a library at a location that already contains a MediaHub library
+- **FR-009**: MediaHub MUST prevent initializing (creating) a new library inside a folder that already contains a MediaHub library; instead it MUST offer to open/attach the existing library
 - **FR-010**: MediaHub MUST support multiple independent libraries on the same system
 - **FR-011**: MediaHub MUST organize library files in a standard folder structure that remains usable without MediaHub
 - **FR-012**: MediaHub MUST preserve library identity and structure when files are modified by external tools
@@ -110,7 +113,7 @@ MediaHub needs to uniquely identify each library to prevent conflicts, enable mu
 
 - Libraries will be stored on standard macOS file systems (APFS, HFS+, or network volumes)
 - Users have appropriate file system permissions to create directories and files at the chosen library location
-- Library metadata will be stored in a standard format (JSON or plist) that is human-readable
+- Library metadata will be stored in a transparent, human-readable format
 - The library root directory will contain both media files and metadata files in a predictable structure
 - Library identifiers will be UUIDs or similar globally unique identifiers
 - Multiple libraries can coexist on the same system without conflicts
