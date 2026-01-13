@@ -2,14 +2,24 @@
 set -euo pipefail
 
 # MediaHub CLI Smoke Test
-# - Uses ONLY /tmp paths
+# - Uses ONLY /tmp paths by default
 # - SAFE: no touching any real libraries
+# - Optional real-source tests (read-only) when MH_REAL_SOURCES=1
 
 BIN="swift run mediahub"
 
 LIB="/tmp/mh_library"
 LIB_MOVED="/tmp/mh_library_moved"
 SRC="/tmp/mh_source"
+LIB_REAL="/tmp/mh_library_real_sources"
+
+# Real source paths (READ ONLY - never import into these)
+REAL_SOURCES=(
+  "/Volumes/Photos/Photos/Librairie"
+  "/Volumes/Photos/Photos/Librairie_Amateur"
+  "/Volumes/Photos/Boulots"
+  "/Volumes/Photos/Videos"
+)
 
 # --- colors ---
 RED='\033[0;31m'
@@ -64,23 +74,51 @@ echo -e "${BLUE}${BOLD}║  ${NC}• Attachement de source${BLUE}${BOLD}        
 echo -e "${BLUE}${BOLD}║  ${NC}• Détection et import de médias${BLUE}${BOLD}                                                 ║${NC}"
 echo -e "${BLUE}${BOLD}║  ${NC}• Tests d'idempotence et de déplacement${BLUE}${BOLD}                                        ║${NC}"
 echo -e "${BLUE}${BOLD}║                                                                                   ║${NC}"
-echo -e "${BLUE}${BOLD}║  ${YELLOW}⚠ Utilise uniquement des chemins /tmp - SÉCURISÉ${BLUE}${BOLD}                              ║${NC}"
+if [[ "${MH_REAL_SOURCES:-}" == "1" ]]; then
+  echo -e "${BLUE}${BOLD}║  ${RED}${BOLD}⚠ MODE SOURCES RÉELLES ACTIVÉ (MH_REAL_SOURCES=1)${BLUE}${BOLD}                              ║${NC}"
+  echo -e "${BLUE}${BOLD}║  ${RED}${BOLD}  LECTURE SEULE - AUCUN IMPORT NE SERA EFFECTUÉ${BLUE}${BOLD}                                 ║${NC}"
+else
+  echo -e "${BLUE}${BOLD}║  ${YELLOW}⚠ Utilise uniquement des chemins /tmp - SÉCURISÉ${BLUE}${BOLD}                              ║${NC}"
+  echo -e "${BLUE}${BOLD}║  ${CYAN}💡 Pour tester des sources réelles: MH_REAL_SOURCES=1 ./scripts/smoke_cli.sh${BLUE}${BOLD}          ║${NC}"
+fi
 echo -e "${BLUE}${BOLD}║                                                                                   ║${NC}"
 echo -e "${BLUE}${BOLD}╚═══════════════════════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
+# Safety banner for real sources mode
+if [[ "${MH_REAL_SOURCES:-}" == "1" ]]; then
+  echo -e "${RED}${BOLD}╔═══════════════════════════════════════════════════════════════════════════════════╗${NC}"
+  echo -e "${RED}${BOLD}║                                                                                   ║${NC}"
+  echo -e "${RED}${BOLD}║                    ${BOLD}⚠ MODE LECTURE SEULE ACTIVÉ ⚠${RED}${BOLD}                              ║${NC}"
+  echo -e "${RED}${BOLD}║                                                                                   ║${NC}"
+  echo -e "${RED}${BOLD}║  ${BOLD}Note: Le test /tmp peut importer normalement.${RED}${BOLD}                                            ║${NC}"
+  echo -e "${RED}${BOLD}║  ${BOLD}Aucun import ne sera effectué sur les sources réelles.${RED}${BOLD}                                 ║${NC}"
+  echo -e "${RED}${BOLD}║  ${BOLD}Seules les opérations de lecture sont autorisées sur sources réelles:${RED}${BOLD}                  ║${NC}"
+  echo -e "${RED}${BOLD}║  ${BOLD}  • Attachement de source (lecture)${RED}${BOLD}                                                      ║${NC}"
+  echo -e "${RED}${BOLD}║  ${BOLD}  • Détection (scanning)${RED}${BOLD}                                                                 ║${NC}"
+  echo -e "${RED}${BOLD}║  ${BOLD}  • Tests de déterminisme${RED}${BOLD}                                                                ║${NC}"
+  echo -e "${RED}${BOLD}║                                                                                   ║${NC}"
+  echo -e "${RED}${BOLD}║  ${BOLD}Les sources réelles ne seront JAMAIS modifiées.${RED}${BOLD}                                            ║${NC}"
+  echo -e "${RED}${BOLD}║                                                                                   ║${NC}"
+  echo -e "${RED}${BOLD}╚═══════════════════════════════════════════════════════════════════════════════════╝${NC}"
+  echo ""
+  sleep 2  # Give user time to read
+fi
+
+# Run function
 run() {
   echo -e "${YELLOW}  → Exécution:${NC} ${CYAN}$BIN $*${NC}" >&2
   $BIN "$@"
 }
 
 # Extract JSON from command output (handles build messages)
+# Uses stdin to avoid "Argument list too long" errors with large outputs
 extract_json() {
   local output="$1"
   # Try to find JSON object in output (look for { ... })
-  python3 -c "
+  echo "$output" | python3 -c "
 import json, sys, re
-text = sys.argv[1]
+text = sys.stdin.read()
 # Remove build messages (lines starting with [ or containing 'Building' or 'Planning')
 lines = [l for l in text.split('\n') if l and not l.strip().startswith('[') and 'Building' not in l and 'Planning' not in l and 'Compiling' not in l and 'Write swift-version' not in l]
 cleaned = '\n'.join(lines)
@@ -92,7 +130,7 @@ if match:
         print(json.dumps(j))
     except:
         pass
-" "$output"
+"
 }
 
 assert_eq() {
@@ -119,6 +157,149 @@ assert_dir_exists() {
     success "Répertoire existe: $path"
   else
     fail "Répertoire attendu introuvable: $path"
+  fi
+}
+
+# Extract JSON value from JSON string
+# Uses stdin to avoid "Argument list too long" errors with large JSON
+json_get() {
+  local json_str="$1"
+  local python_expr="$2"
+  echo "$json_str" | python3 -c "import json, sys; j=json.loads(sys.stdin.read()); $python_expr" 2>/dev/null || echo ""
+}
+
+# Test a real source (read-only: attach + detect only)
+test_real_source() {
+  local source_path="$1"
+  local source_name=$(basename "$source_path")
+  
+  # Temporarily disable exit on error for this function
+  set +e
+  
+  echo ""
+  echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${CYAN}${BOLD}Source:${NC} ${CYAN}$source_path${NC}"
+  echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  
+  # Check if path exists
+  if [[ ! -d "$source_path" ]]; then
+    echo -e "${YELLOW}⚠ Chemin introuvable, ignoré${NC}"
+    set -e
+    return 1
+  fi
+  
+  # Check if readable
+  if [[ ! -r "$source_path" ]]; then
+    echo -e "${YELLOW}⚠ Chemin non lisible, ignoré${NC}"
+    set -e
+    return 1
+  fi
+  
+  local start_time=$(date +%s)
+  
+  # Attach source
+  echo -e "${CYAN}Attachement de la source...${NC}"
+  local attach_output=$(run source attach "$source_path" --json 2>&1 || true)
+  local attach_json=$(extract_json "$attach_output")
+  
+  if [[ -z "$attach_json" ]]; then
+    echo -e "${YELLOW}⚠ Échec d'attachement (peut être dû aux permissions)${NC}"
+    echo -e "${YELLOW}   Sortie: ${attach_output:0:200}...${NC}"
+    set -e
+    return 1
+  fi
+  
+  local source_id=$(json_get "$attach_json" "print(j.get('sourceId', j.get('source_id', j.get('id', ''))))")
+  
+  if [[ -z "$source_id" ]]; then
+    echo -e "${YELLOW}⚠ Impossible d'extraire sourceId${NC}"
+    set -e
+    return 1
+  fi
+  
+  success "Source attachée: $source_id"
+  
+  # First detect
+  echo -e "${CYAN}Première détection...${NC}"
+  local detect1_output=$(run detect "$source_id" --json 2>&1 || true)
+  local detect1_json=$(extract_json "$detect1_output")
+  
+  if [[ -z "$detect1_json" ]]; then
+    echo -e "${YELLOW}⚠ Échec de la première détection${NC}"
+    set -e
+    return 1
+  fi
+  
+  local total1=$(json_get "$detect1_json" "print(j.get('summary', {}).get('totalScanned', 0))")
+  local new1=$(json_get "$detect1_json" "print(j.get('summary', {}).get('newItems', 0))")
+  local known1=$(json_get "$detect1_json" "print(j.get('summary', {}).get('knownItems', 0))")
+  local candidates1=$(json_get "$detect1_json" "print(len(j.get('candidates', [])))")
+  
+  info "Première détection: scanné=$total1, nouveau=$new1, connu=$known1, candidats=$candidates1"
+  
+  # Second detect (for determinism)
+  echo -e "${CYAN}Deuxième détection (test de déterminisme)...${NC}"
+  local detect2_output=$(run detect "$source_id" --json 2>&1 || true)
+  local detect2_json=$(extract_json "$detect2_output")
+  
+  if [[ -z "$detect2_json" ]]; then
+    echo -e "${YELLOW}⚠ Échec de la deuxième détection${NC}"
+    set -e
+    return 1
+  fi
+  
+  local total2=$(json_get "$detect2_json" "print(j.get('summary', {}).get('totalScanned', 0))")
+  local new2=$(json_get "$detect2_json" "print(j.get('summary', {}).get('newItems', 0))")
+  local known2=$(json_get "$detect2_json" "print(j.get('summary', {}).get('knownItems', 0))")
+  local candidates2=$(json_get "$detect2_json" "print(len(j.get('candidates', [])))")
+  
+  info "Deuxième détection: scanné=$total2, nouveau=$new2, connu=$known2, candidats=$candidates2"
+  
+  # Assert determinism
+  local end_time=$(date +%s)
+  local duration=$((end_time - start_time))
+  
+  local determinism_ok=true
+  
+  if [[ "$total1" != "$total2" ]]; then
+    echo -e "${RED}✗ ÉCHEC DÉTERMINISME: totalScanned diffère ($total1 vs $total2)${NC}"
+    determinism_ok=false
+  else
+    success "Déterminisme: totalScanned identique ($total1)"
+  fi
+  
+  if [[ "$new1" != "$new2" ]]; then
+    echo -e "${RED}✗ ÉCHEC DÉTERMINISME: newItems diffère ($new1 vs $new2)${NC}"
+    determinism_ok=false
+  else
+    success "Déterminisme: newItems identique ($new1)"
+  fi
+  
+  if [[ "$known1" != "$known2" ]]; then
+    echo -e "${RED}✗ ÉCHEC DÉTERMINISME: knownItems diffère ($known1 vs $known2)${NC}"
+    determinism_ok=false
+  else
+    success "Déterminisme: knownItems identique ($known1)"
+  fi
+  
+  if [[ -n "$candidates1" && -n "$candidates2" && "$candidates1" != "$candidates2" ]]; then
+    echo -e "${RED}✗ ÉCHEC DÉTERMINISME: candidates diffère ($candidates1 vs $candidates2)${NC}"
+    determinism_ok=false
+  elif [[ -n "$candidates1" && -n "$candidates2" ]]; then
+    success "Déterminisme: candidates identique ($candidates1)"
+  fi
+  
+  echo -e "${CYAN}Durée: ${duration}s${NC}"
+  
+  # Re-enable exit on error
+  set -e
+  
+  if [[ "$determinism_ok" == "true" ]]; then
+    success "Test de déterminisme réussi pour $source_name"
+    return 0
+  else
+    echo -e "${RED}✗ Test de déterminisme échoué pour $source_name${NC}" >&2
+    return 1
   fi
 }
 
@@ -248,9 +429,82 @@ fi
 step "Arborescence finale de la bibliothèque"
 find "$LIB_MOVED" -maxdepth 3 -type f | sed "s|$LIB_MOVED/||" | sort
 
+# Track test results
+TMP_TEST_PASSED=true
+REAL_SOURCES_TESTED=0
+REAL_SOURCES_SKIPPED=0
+REAL_SOURCES_FAILED=0
+
+# --- real source tests (optional) ---
+if [[ "${MH_REAL_SOURCES:-}" == "1" ]]; then
+  step "Tests sur sources réelles (lecture seule)"
+  
+  # Create or reuse library for real sources
+  if [[ ! -d "$LIB_REAL" ]]; then
+    test_header "Création de bibliothèque pour tests réels"
+    run library create "$LIB_REAL"
+    export MEDIAHUB_LIBRARY="$LIB_REAL"
+    success "Bibliothèque créée: $LIB_REAL"
+  else
+    export MEDIAHUB_LIBRARY="$LIB_REAL"
+    info "Réutilisation de la bibliothèque: $LIB_REAL"
+  fi
+  
+  # Test each real source
+  set +e  # Temporarily disable exit on error for loop
+  for real_source in "${REAL_SOURCES[@]}"; do
+    if test_real_source "$real_source"; then
+      ((REAL_SOURCES_TESTED++))
+    else
+      if [[ -d "$real_source" ]]; then
+        ((REAL_SOURCES_FAILED++))
+      else
+        ((REAL_SOURCES_SKIPPED++))
+      fi
+    fi
+  done
+  set -e  # Re-enable exit on error
+  
+  echo ""
+  echo -e "${CYAN}Résumé des tests sur sources réelles:${NC}"
+  echo -e "  ${GREEN}✓ Testées avec succès: $REAL_SOURCES_TESTED${NC}"
+  echo -e "  ${YELLOW}⚠ Ignorées (introuvables): $REAL_SOURCES_SKIPPED${NC}"
+  if [[ $REAL_SOURCES_FAILED -gt 0 ]]; then
+    echo -e "  ${RED}✗ Échouées: $REAL_SOURCES_FAILED${NC}"
+  fi
+else
+  echo ""
+  echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${CYAN}Tests sur sources réelles: ${YELLOW}DÉSACTIVÉS${NC}"
+  echo -e "${CYAN}Pour activer: ${BOLD}MH_REAL_SOURCES=1 ./scripts/smoke_cli.sh${NC}"
+  echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+fi
+
+# --- final summary ---
 echo ""
 echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}${BOLD}  ✓ TOUS LES TESTS ONT RÉUSSI${NC}"
-echo -e "${GREEN}${BOLD}  Le test de fumée est passé avec succès !${NC}"
+echo -e "${GREEN}${BOLD}  ✓ TEST /TMP: RÉUSSI${NC}"
+
+if [[ "${MH_REAL_SOURCES:-}" == "1" ]]; then
+  echo ""
+  echo -e "${CYAN}${BOLD}  RÉSUMÉ DES TESTS SUR SOURCES RÉELLES:${NC}"
+  echo -e "${CYAN}    • Testées: $REAL_SOURCES_TESTED${NC}"
+  echo -e "${CYAN}    • Ignorées: $REAL_SOURCES_SKIPPED${NC}"
+  if [[ $REAL_SOURCES_FAILED -gt 0 ]]; then
+    echo -e "${RED}    • Échouées: $REAL_SOURCES_FAILED${NC}"
+    echo ""
+    echo -e "${RED}${BOLD}  ⚠ CERTAINS TESTS ONT ÉCHOUÉ${NC}"
+  else
+    echo ""
+    echo -e "${GREEN}${BOLD}  ✓ TOUS LES TESTS ONT RÉUSSI${NC}"
+  fi
+else
+  echo -e "${GREEN}${BOLD}  Le test de fumée est passé avec succès !${NC}"
+fi
 echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
+
+# Exit with error if real source tests failed
+if [[ "${MH_REAL_SOURCES:-}" == "1" && $REAL_SOURCES_FAILED -gt 0 ]]; then
+  exit 1
+fi
