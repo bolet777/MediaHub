@@ -31,6 +31,117 @@ MAGENTA='\033[0;35m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
+# --- step tracking ---
+STEP_NAMES=()
+STEP_STATUSES=()
+STEP_OUTPUTS=()
+STEP_DURATIONS=()
+STEP_ERRORS=()
+SCRIPT_START_TIME=$(date +%s.%N)
+
+# Check if verbose mode is enabled
+VERBOSE="${MH_VERBOSE:-0}"
+
+# Record a step result
+record_step() {
+  local name="$1"
+  local status="$2"  # "PASS" or "FAIL"
+  local output="$3"
+  local duration="$4"
+  local error="${5:-}"
+  
+  STEP_NAMES+=("$name")
+  STEP_STATUSES+=("$status")
+  STEP_OUTPUTS+=("$output")
+  STEP_DURATIONS+=("$duration")
+  STEP_ERRORS+=("$error")
+}
+
+# Get current time in seconds (with decimals)
+step_start() {
+  date +%s.%N
+}
+
+# Calculate duration between two timestamps
+step_end() {
+  local start="$1"
+  local end=$(date +%s.%N)
+  echo "$end" "$start" | awk '{printf "%.1f", $1 - $2}'
+}
+
+# Render final summary table
+render_summary_table() {
+  local total_duration=$(echo "$SCRIPT_START_TIME" "$(date +%s.%N)" | awk '{printf "%.1f", $2 - $1}')
+  local all_passed=true
+  
+  # Check if any step failed
+  for status in "${STEP_STATUSES[@]}"; do
+    if [[ "$status" == "FAIL" ]]; then
+      all_passed=false
+      break
+    fi
+  done
+  
+  echo ""
+  echo -e "${BOLD}┌─────────────────────────────┬────────┬──────────────────────────────────────┐${NC}"
+  echo -e "${BOLD}│ STEP                        │ STATUS │ KEY OUTPUT                          │${NC}"
+  echo -e "${BOLD}├─────────────────────────────┼────────┼──────────────────────────────────────┤${NC}"
+  
+  for i in "${!STEP_NAMES[@]}"; do
+    local name="${STEP_NAMES[$i]}"
+    local status="${STEP_STATUSES[$i]}"
+    local output="${STEP_OUTPUTS[$i]}"
+    local duration="${STEP_DURATIONS[$i]}"
+    local error="${STEP_ERRORS[$i]}"
+    
+    # Truncate name if too long
+    local name_plain=$(echo -e "$name" | sed 's/\x1b\[[0-9;]*m//g')
+    if [[ ${#name_plain} -gt 25 ]]; then
+      name="${name_plain:0:22}..."
+    fi
+    
+    # Format status
+    local status_icon=""
+    if [[ "$status" == "PASS" ]]; then
+      status_icon="${GREEN}✅${NC}"
+    else
+      status_icon="${RED}❌${NC}"
+      all_passed=false
+    fi
+    
+    # Format output (use error if present, otherwise use output)
+    local display_output="$output"
+    if [[ -n "$error" ]]; then
+      display_output="${RED}$error${NC}"
+    fi
+    
+    # Truncate output if too long
+    local output_plain=$(echo -e "$display_output" | sed 's/\x1b\[[0-9;]*m//g')
+    if [[ ${#output_plain} -gt 36 ]]; then
+      local output_prefix="${output_plain:0:33}"
+      if [[ -n "$error" ]]; then
+        display_output="${RED}${output_prefix}...${NC}"
+      else
+        display_output="${output_prefix}..."
+      fi
+    fi
+    
+    # Simple printf with fixed widths (no vertical borders at start/end of content)
+    printf "${BOLD}│${NC} %-25s ${BOLD}│${NC} %-6s ${BOLD}│${NC} %-36s ${BOLD}│${NC}\n" "$name" "$status_icon" "$display_output"
+  done
+  
+  echo -e "${BOLD}└─────────────────────────────┴────────┴──────────────────────────────────────┘${NC}"
+  echo ""
+  
+  # Final status
+  if [[ "$all_passed" == "true" ]]; then
+    echo -e "${GREEN}${BOLD}FINAL: ✅ PASS${NC}   ${CYAN}Duration: ${total_duration}s${NC}"
+  else
+    echo -e "${RED}${BOLD}FINAL: ❌ FAIL${NC}   ${CYAN}Duration: ${total_duration}s${NC}"
+  fi
+  echo ""
+}
+
 # --- helpers ---
 fail() { 
   echo -e "${RED}${BOLD}✗ ERREUR:${NC} ${RED}$*${NC}" >&2
@@ -38,23 +149,33 @@ fail() {
 }
 
 success() {
-  echo -e "${GREEN}${BOLD}✓${NC} ${GREEN}$*${NC}"
+  if [[ "$VERBOSE" == "1" ]]; then
+    echo -e "${GREEN}${BOLD}✓${NC} ${GREEN}$*${NC}"
+  fi
 }
 
 info() {
-  echo -e "${CYAN}ℹ${NC} ${CYAN}$*${NC}"
+  if [[ "$VERBOSE" == "1" ]]; then
+    echo -e "${CYAN}ℹ${NC} ${CYAN}$*${NC}"
+  fi
 }
 
 step() {
-  echo ""
-  echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-  echo -e "${BLUE}${BOLD}  $*${NC}"
-  echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  if [[ "$VERBOSE" == "1" ]]; then
+    echo ""
+    echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}${BOLD}  $*${NC}"
+    echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  else
+    echo -e "${BLUE}${BOLD}▶${NC} ${BLUE}$*${NC}..."
+  fi
 }
 
 test_header() {
-  echo ""
-  echo -e "${MAGENTA}${BOLD}▶ Test:${NC} ${MAGENTA}$*${NC}"
+  if [[ "$VERBOSE" == "1" ]]; then
+    echo ""
+    echo -e "${MAGENTA}${BOLD}▶ Test:${NC} ${MAGENTA}$*${NC}"
+  fi
 }
 
 need_cmd() { command -v "$1" >/dev/null 2>&1 || fail "Commande requise manquante: $1"; }
@@ -107,7 +228,9 @@ fi
 
 # Run function
 run() {
-  echo -e "${YELLOW}  → Exécution:${NC} ${CYAN}$BIN $*${NC}" >&2
+  if [[ "$VERBOSE" == "1" ]]; then
+    echo -e "${YELLOW}  → Exécution:${NC} ${CYAN}$BIN $*${NC}" >&2
+  fi
   $BIN "$@"
 }
 
@@ -304,14 +427,21 @@ test_real_source() {
 }
 
 # --- setup ---
-step "Préparation de l'environnement de test"
+step "Setup"
+STEP_START=$(step_start)
 
-echo -e "${CYAN}Nettoyage des répertoires temporaires...${NC}"
+if [[ "$VERBOSE" == "1" ]]; then
+  echo -e "${CYAN}Nettoyage des répertoires temporaires...${NC}"
+fi
 rm -rf "$LIB" "$LIB_MOVED" "$SRC"
 mkdir -p "$SRC/sub"
-success "Répertoires nettoyés"
+if [[ "$VERBOSE" == "1" ]]; then
+  success "Répertoires nettoyés"
+fi
 
-echo -e "${CYAN}Création de fichiers média de test...${NC}"
+if [[ "$VERBOSE" == "1" ]]; then
+  echo -e "${CYAN}Création de fichiers média de test...${NC}"
+fi
 printf "fake" > "$SRC/IMG_0001.HEIC"
 printf "fake" > "$SRC/IMG_0002.JPG"
 printf "fake" > "$SRC/sub/VID_0003.MOV"
@@ -322,10 +452,16 @@ touch -t 202401021200 "$SRC/IMG_0001.HEIC"
 touch -t 202402031200 "$SRC/IMG_0002.JPG"
 touch -t 202403041200 "$SRC/sub/VID_0003.MOV"
 touch -t 202404051200 "$SRC/sub/IMG_0004.PNG"
-success "4 fichiers média créés (2 images, 1 vidéo, 1 image dans sous-dossier)"
+if [[ "$VERBOSE" == "1" ]]; then
+  success "4 fichiers média créés (2 images, 1 vidéo, 1 image dans sous-dossier)"
+fi
+
+STEP_DURATION=$(step_end "$STEP_START")
+record_step "Setup" "PASS" "4 fake media files" "$STEP_DURATION"
 
 # --- create library ---
-step "Création de la bibliothèque"
+step "Library create"
+STEP_START=$(step_start)
 
 test_header "Création de la bibliothèque avec chemin positionnel"
 run library create "$LIB"
@@ -337,8 +473,12 @@ assert_file_exists "$LIB/.mediahub/library.json"
 export MEDIAHUB_LIBRARY="$LIB"
 info "Variable d'environnement MEDIAHUB_LIBRARY définie: $LIB"
 
+STEP_DURATION=$(step_end "$STEP_START")
+record_step "Library create" "PASS" "$LIB" "$STEP_DURATION"
+
 # --- attach source ---
-step "Attachement de la source"
+step "Source attach"
+STEP_START=$(step_start)
 
 test_header "Attachement de la source avec extraction de l'ID"
 ATTACH_JSON=$(run source attach "$SRC" --json)
@@ -347,8 +487,13 @@ SID=$(python3 -c "import json, sys; j=json.loads(sys.argv[1]); print(j.get('sour
 success "Source attachée avec succès"
 info "Source ID: ${BOLD}$SID${NC}"
 
+STEP_DURATION=$(step_end "$STEP_START")
+SID_SHORT="${SID:0:8}...${SID: -4}"
+record_step "Source attach" "PASS" "SID=$SID_SHORT" "$STEP_DURATION"
+
 # --- detect (first run) ---
-step "Première détection"
+step "Detect (pre-import)"
+STEP_START=$(step_start)
 
 test_header "Détection initiale (devrait trouver 4 nouveaux éléments)"
 DETECT1_JSON=$(run detect "$SID" --json)
@@ -357,8 +502,12 @@ NEW1=$(python3 -c "import json, sys; j=json.loads(sys.argv[1]); print(j['summary
 assert_eq "$TOTAL1" "4" "Total d'éléments scannés"
 assert_eq "$NEW1" "4" "Nouveaux éléments détectés"
 
+STEP_DURATION=$(step_end "$STEP_START")
+record_step "Detect (pre-import)" "PASS" "scanned=$TOTAL1 new=$NEW1 known=0" "$STEP_DURATION"
+
 # --- import all ---
-step "Import des éléments détectés"
+step "Import"
+STEP_START=$(step_start)
 
 test_header "Import de tous les éléments (devrait importer 4)"
 IMPORT1_JSON=$(run import "$SID" --all --json)
@@ -376,18 +525,27 @@ assert_file_exists "$LIB/2024/03/VID_0003.MOV"
 assert_file_exists "$LIB/2024/04/IMG_0004.PNG"
 success "Tous les fichiers sont présents dans la structure attendue"
 
+STEP_DURATION=$(step_end "$STEP_START")
+record_step "Import" "PASS" "imported=$IMPORTED1 failed=$FAILED1" "$STEP_DURATION"
+
 # --- detect after import ---
-step "Détection après import"
+step "Detect (post-import)"
+STEP_START=$(step_start)
 
 test_header "Détection après import (devrait trouver 0 nouveau, 4 connus)"
 DETECT2_JSON=$(run detect "$SID" --json)
+TOTAL2=$(python3 -c "import json, sys; j=json.loads(sys.argv[1]); print(j['summary']['totalScanned'])" "$DETECT2_JSON")
 NEW2=$(python3 -c "import json, sys; j=json.loads(sys.argv[1]); print(j['summary']['newItems'])" "$DETECT2_JSON")
 KNOWN2=$(python3 -c "import json, sys; j=json.loads(sys.argv[1]); print(j['summary']['knownItems'])" "$DETECT2_JSON")
 assert_eq "$NEW2" "0" "Nouveaux éléments (devrait être 0)"
 assert_eq "$KNOWN2" "4" "Éléments connus (devrait être 4)"
 
+STEP_DURATION=$(step_end "$STEP_START")
+record_step "Detect (post-import)" "PASS" "scanned=$TOTAL2 new=$NEW2 known=$KNOWN2" "$STEP_DURATION"
+
 # --- idempotence: import again should import 0 ---
-step "Test d'idempotence"
+step "Import (idempotence)"
+STEP_START=$(step_start)
 
 test_header "Réimport (devrait importer 0 élément - idempotence)"
 IMPORT2_JSON=$(run import "$SID" --all --json)
@@ -395,8 +553,12 @@ IMPORT2_JSON=$(run import "$SID" --all --json)
 IMPORTED2=$(python3 -c "import json, sys; j=json.loads(sys.argv[1]); print(j.get('summary', {}).get('imported', 0) if 'summary' in j else 0)" "$IMPORT2_JSON")
 assert_eq "$IMPORTED2" "0" "Éléments importés lors du réimport (devrait être 0)"
 
+STEP_DURATION=$(step_end "$STEP_START")
+record_step "Import (idempotence)" "PASS" "imported=$IMPORTED2" "$STEP_DURATION"
+
 # --- move library test ---
-step "Test de déplacement de bibliothèque"
+step "Move + status"
+STEP_START=$(step_start)
 
 test_header "Déplacement de la bibliothèque"
 info "Déplacement de $LIB vers $LIB_MOVED"
@@ -426,8 +588,13 @@ if [[ -n "$ORIG_LIB_ID" ]]; then
   assert_eq "$STATUS_MOVED_ID" "$ORIG_LIB_ID" "ID de bibliothèque (devrait être inchangé après déplacement)"
 fi
 
-step "Arborescence finale de la bibliothèque"
-find "$LIB_MOVED" -maxdepth 3 -type f | sed "s|$LIB_MOVED/||" | sort
+if [[ "$VERBOSE" == "1" ]]; then
+  step "Arborescence finale de la bibliothèque"
+  find "$LIB_MOVED" -maxdepth 3 -type f | sed "s|$LIB_MOVED/||" | sort
+fi
+
+STEP_DURATION=$(step_end "$STEP_START")
+record_step "Move + status" "PASS" "ID unchanged" "$STEP_DURATION"
 
 # Track test results
 TMP_TEST_PASSED=true
@@ -481,28 +648,21 @@ else
 fi
 
 # --- final summary ---
-echo ""
-echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}${BOLD}  ✓ TEST /TMP: RÉUSSI${NC}"
+render_summary_table
 
+# Real sources summary (if enabled)
 if [[ "${MH_REAL_SOURCES:-}" == "1" ]]; then
   echo ""
-  echo -e "${CYAN}${BOLD}  RÉSUMÉ DES TESTS SUR SOURCES RÉELLES:${NC}"
-  echo -e "${CYAN}    • Testées: $REAL_SOURCES_TESTED${NC}"
-  echo -e "${CYAN}    • Ignorées: $REAL_SOURCES_SKIPPED${NC}"
+  echo -e "${CYAN}${BOLD}Real Sources Summary:${NC}"
+  echo -e "${CYAN}  • Tested: $REAL_SOURCES_TESTED${NC}"
+  echo -e "${CYAN}  • Skipped: $REAL_SOURCES_SKIPPED${NC}"
   if [[ $REAL_SOURCES_FAILED -gt 0 ]]; then
-    echo -e "${RED}    • Échouées: $REAL_SOURCES_FAILED${NC}"
+    echo -e "${RED}  • Failed: $REAL_SOURCES_FAILED${NC}"
     echo ""
-    echo -e "${RED}${BOLD}  ⚠ CERTAINS TESTS ONT ÉCHOUÉ${NC}"
-  else
-    echo ""
-    echo -e "${GREEN}${BOLD}  ✓ TOUS LES TESTS ONT RÉUSSI${NC}"
+    echo -e "${RED}${BOLD}⚠ SOME REAL SOURCE TESTS FAILED${NC}"
   fi
-else
-  echo -e "${GREEN}${BOLD}  Le test de fumée est passé avec succès !${NC}"
+  echo ""
 fi
-echo -e "${GREEN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
 
 # Exit with error if real source tests failed
 if [[ "${MH_REAL_SOURCES:-}" == "1" && $REAL_SOURCES_FAILED -gt 0 ]]; then
