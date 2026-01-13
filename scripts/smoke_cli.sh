@@ -4,9 +4,50 @@ set -euo pipefail
 # MediaHub CLI Smoke Test
 # - Uses ONLY /tmp paths by default
 # - SAFE: no touching any real libraries
-# - Optional real-source tests (read-only) when MH_REAL_SOURCES=1
+# - Optional real-source tests (read-only) with -real flag
 
 BIN="swift run mediahub"
+
+# --- parse arguments ---
+VERBOSE=0
+REAL_SOURCES=0
+
+show_help() {
+  echo "Usage: $0 [OPTIONS]"
+  echo ""
+  echo "Options:"
+  echo "  -verbose, --verbose    Enable verbose output"
+  echo "  -real, --real          Test with real sources (read-only)"
+  echo "  -h, --help             Show this help message"
+  echo ""
+  echo "Examples:"
+  echo "  $0                     Run basic smoke test"
+  echo "  $0 -verbose            Run with detailed output"
+  echo "  $0 -real               Test with real sources"
+  echo "  $0 -verbose -real      Verbose output with real sources"
+  exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -verbose|--verbose)
+      VERBOSE=1
+      shift
+      ;;
+    -real|--real)
+      REAL_SOURCES=1
+      shift
+      ;;
+    -h|--help)
+      show_help
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      echo "Use -h or --help for usage information" >&2
+      exit 1
+      ;;
+  esac
+done
 
 LIB="/tmp/mh_library"
 LIB_MOVED="/tmp/mh_library_moved"
@@ -39,8 +80,7 @@ STEP_DURATIONS=()
 STEP_ERRORS=()
 SCRIPT_START_TIME=$(date +%s.%N)
 
-# Check if verbose mode is enabled
-VERBOSE="${MH_VERBOSE:-0}"
+# VERBOSE and REAL_SOURCES are set by argument parsing above
 
 # Record a step result
 record_step() {
@@ -195,19 +235,19 @@ echo -e "${BLUE}${BOLD}║  ${NC}• Attachement de source${BLUE}${BOLD}        
 echo -e "${BLUE}${BOLD}║  ${NC}• Détection et import de médias${BLUE}${BOLD}                                                 ║${NC}"
 echo -e "${BLUE}${BOLD}║  ${NC}• Tests d'idempotence et de déplacement${BLUE}${BOLD}                                        ║${NC}"
 echo -e "${BLUE}${BOLD}║                                                                                   ║${NC}"
-if [[ "${MH_REAL_SOURCES:-}" == "1" ]]; then
-  echo -e "${BLUE}${BOLD}║  ${RED}${BOLD}⚠ MODE SOURCES RÉELLES ACTIVÉ (MH_REAL_SOURCES=1)${BLUE}${BOLD}                              ║${NC}"
+if [[ "$REAL_SOURCES" == "1" ]]; then
+  echo -e "${BLUE}${BOLD}║  ${RED}${BOLD}⚠ MODE SOURCES RÉELLES ACTIVÉ (-real)${BLUE}${BOLD}                              ║${NC}"
   echo -e "${BLUE}${BOLD}║  ${RED}${BOLD}  LECTURE SEULE - AUCUN IMPORT NE SERA EFFECTUÉ${BLUE}${BOLD}                                 ║${NC}"
 else
   echo -e "${BLUE}${BOLD}║  ${YELLOW}⚠ Utilise uniquement des chemins /tmp - SÉCURISÉ${BLUE}${BOLD}                              ║${NC}"
-  echo -e "${BLUE}${BOLD}║  ${CYAN}💡 Pour tester des sources réelles: MH_REAL_SOURCES=1 ./scripts/smoke_cli.sh${BLUE}${BOLD}          ║${NC}"
+  echo -e "${BLUE}${BOLD}║  ${CYAN}💡 Pour tester des sources réelles: $0 -real${BLUE}${BOLD}          ║${NC}"
 fi
 echo -e "${BLUE}${BOLD}║                                                                                   ║${NC}"
 echo -e "${BLUE}${BOLD}╚═══════════════════════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
 # Safety banner for real sources mode
-if [[ "${MH_REAL_SOURCES:-}" == "1" ]]; then
+if [[ "$REAL_SOURCES" == "1" ]]; then
   echo -e "${RED}${BOLD}╔═══════════════════════════════════════════════════════════════════════════════════╗${NC}"
   echo -e "${RED}${BOLD}║                                                                                   ║${NC}"
   echo -e "${RED}${BOLD}║                    ${BOLD}⚠ MODE LECTURE SEULE ACTIVÉ ⚠${RED}${BOLD}                              ║${NC}"
@@ -603,7 +643,7 @@ REAL_SOURCES_SKIPPED=0
 REAL_SOURCES_FAILED=0
 
 # --- real source tests (optional) ---
-if [[ "${MH_REAL_SOURCES:-}" == "1" ]]; then
+if [[ "$REAL_SOURCES" == "1" ]]; then
   step "Tests sur sources réelles (lecture seule)"
   
   # Create or reuse library for real sources
@@ -643,7 +683,7 @@ else
   echo ""
   echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
   echo -e "${CYAN}Tests sur sources réelles: ${YELLOW}DÉSACTIVÉS${NC}"
-  echo -e "${CYAN}Pour activer: ${BOLD}MH_REAL_SOURCES=1 ./scripts/smoke_cli.sh${NC}"
+  echo -e "${CYAN}Pour activer: ${BOLD}$0 -real${NC}"
   echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 fi
 
@@ -651,7 +691,7 @@ fi
 render_summary_table
 
 # Real sources summary (if enabled)
-if [[ "${MH_REAL_SOURCES:-}" == "1" ]]; then
+if [[ "$REAL_SOURCES" == "1" ]]; then
   echo ""
   echo -e "${CYAN}${BOLD}Real Sources Summary:${NC}"
   echo -e "${CYAN}  • Tested: $REAL_SOURCES_TESTED${NC}"
@@ -665,6 +705,6 @@ if [[ "${MH_REAL_SOURCES:-}" == "1" ]]; then
 fi
 
 # Exit with error if real source tests failed
-if [[ "${MH_REAL_SOURCES:-}" == "1" && $REAL_SOURCES_FAILED -gt 0 ]]; then
+if [[ "$REAL_SOURCES" == "1" && $REAL_SOURCES_FAILED -gt 0 ]]; then
   exit 1
 fi
