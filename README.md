@@ -1,238 +1,153 @@
-# MediaHub - Slice 1 Implementation
+# MediaHub
 
-This is the implementation of **Slice 1: Establishing a MediaHub Library as a persistent, identifiable entity on disk**.
+MediaHub is a macOS media library system designed as a transparent, filesystem‑first alternative to Photos.app.
+It focuses on scalability, determinism, and long‑term maintainability for users managing large photo and video collections.
 
-## Overview
+---
 
-This implementation provides the foundational library management capabilities for MediaHub:
+## Current Status
 
-- **Library Creation**: Create new MediaHub libraries at user-specified locations
-- **Library Opening**: Open existing libraries by path or identifier
-- **Library Identity**: Unique identifiers that persist across moves and renames
-- **Library Validation**: Integrity checking when opening libraries
-- **Library Discovery**: Find libraries at known and specified locations
-- **Legacy Support**: Adopt libraries created by prior versions (e.g., MediaVault)
+The MediaHub core is fully implemented, tested, and validated through the following slices:
+
+- **Slice 1 — Library Entity & Identity**
+  - Persistent, identifiable libraries on disk
+  - Multiple independent libraries
+  - Validation, discovery, and identity persistence across moves/renames
+
+- **Slice 2 — Sources & Import Detection**
+  - Folder‑based Sources
+  - Read‑only, deterministic detection of new media
+  - Explainable detection results
+  - Persistent Source–Library associations
+
+- **Slice 3 — Import Execution & Media Organization**
+  - Real media import (copy)
+  - Deterministic Year/Month (YYYY/MM) organization
+  - Collision handling (rename / skip / error)
+  - Atomic and interruption‑safe import
+  - Known‑items tracking to prevent re‑imports
+  - Auditable import results
+
+All three slices are frozen and covered by automated validation.
+
+---
+
+## What MediaHub Does Today
+
+- Create and manage multiple independent media libraries
+- Store libraries as standard filesystem structures (no proprietary containers)
+- Attach one or more Sources to a library
+- Detect new photos and videos deterministically
+- Import selected media safely into the library
+- Organize media by Year / Month (YYYY/MM)
+- Handle filename collisions predictably
+- Track imported items to avoid duplicates
+- Produce transparent, auditable import results
+- Preserve compatibility with external tools (Finder, backup software, DigiKam, etc.)
+
+---
+
+## Architecture Overview
+
+MediaHub is implemented as a Swift Package with a strict separation of concerns:
+
+- **Library Core**: identity, structure, validation, discovery
+- **Source Management**: source identity, validation, detection
+- **Import Engine**: timestamp resolution, destination mapping, collision handling, atomic copy
+- **Tracking & Audit**: known‑items persistence and import result storage
+
+Design decisions are documented using Architecture Decision Records (ADRs).
+
+---
 
 ## Project Structure
 
 ```
 MediaHub/
-├── Package.swift                    # Swift package definition
+├── Package.swift
 ├── Sources/
 │   └── MediaHub/
-│       ├── LibraryMetadata.swift   # Metadata structure and serialization
-│       ├── LibraryIdentifier.swift # Unique identifier generation
-│       ├── LibraryStructure.swift  # Library structure validation and creation
-│       ├── LibraryCreation.swift    # Library creation workflow
-│       ├── LibraryOpening.swift     # Library opening and active library management
-│       ├── LibraryIdentityPersistence.swift # Identity persistence across moves
-│       ├── LibraryValidation.swift  # Library validation and integrity checking
-│       └── LibraryDiscovery.swift   # Library discovery at known locations
+│       ├── Library*                # Slice 1: Library entity, identity, validation
+│       │   ├── LibraryMetadata.swift
+│       │   ├── LibraryIdentifier.swift
+│       │   ├── LibraryStructure.swift
+│       │   ├── LibraryCreation.swift
+│       │   ├── LibraryOpening.swift
+│       │   ├── LibraryIdentityPersistence.swift
+│       │   ├── LibraryValidation.swift
+│       │   └── LibraryDiscovery.swift
+│       ├── Source*                 # Slice 2: Sources & detection
+│       │   ├── Source.swift
+│       │   ├── SourceIdentity.swift
+│       │   ├── SourceValidation.swift
+│       │   ├── SourceAssociation.swift
+│       │   ├── SourceScanning.swift
+│       │   ├── LibraryComparison.swift
+│       │   ├── DetectionResult.swift
+│       │   └── DetectionOrchestration.swift
+│       ├── Import*                 # Slice 3: Import execution & orchestration
+│       │   ├── ImportExecution.swift
+│       │   └── ImportResult.swift
+│       ├── TimestampExtraction.swift
+│       ├── DestinationMapping.swift
+│       ├── CollisionHandling.swift
+│       ├── AtomicFileCopy.swift
+│       └── KnownItemsTracking.swift
+├── Tests/
+│   └── MediaHubTests/               # Unit & integration tests (100+)
 ├── docs/
-│   ├── adr/
-│   │   └── 001-library-metadata-specification.md
+│   ├── adr/                         # ADR 001–016
 │   ├── library-structure-specification.md
-│   ├── path-to-identifier-mapping-strategy.md
 │   ├── library-validation-rules.md
+│   ├── path-to-identifier-mapping-strategy.md
 │   └── discovery-scope-slice1.md
 └── specs/
-    └── 001-library-entity/
-        ├── spec.md
-        ├── plan.md
-        └── tasks.md
+    ├── 001-library-entity/
+    ├── 002-sources-import-detection/
+    └── 003-import-execution-media-organization/
 ```
 
-## Key Components
+---
 
-### 1. Library Metadata (Component 1)
+## Validation & Quality
 
-- **LibraryMetadata**: Core metadata structure with UUID identifier
-- **LibraryMetadataSerializer**: JSON serialization/deserialization
-- **LibraryIdentifierGenerator**: UUID v4 generation
+- Swift Package Manager project
+- 100+ automated unit and integration tests
+- Validation documents per slice
+- Deterministic behavior enforced by tests
+- No UI‑driven logic in the core
 
-**Files**: `LibraryMetadata.swift`, `LibraryIdentifier.swift`
-
-### 2. Library Structure (Component 2)
-
-- **LibraryStructureValidator**: Validates library structure
-- **LibraryStructureCreator**: Creates library structure on disk
-
-**Files**: `LibraryStructure.swift`
-
-### 3. Library Creation (Component 4)
-
-- **LibraryCreator**: Orchestrates library creation workflow
-- **LibraryPathValidator**: Validates target paths
-- **LibraryCreationRollback**: Handles failed creation cleanup
-
-**Files**: `LibraryCreation.swift`
-
-### 4. Library Opening (Component 5)
-
-- **LibraryOpener**: Orchestrates library opening workflow
-- **ActiveLibraryManager**: Manages currently active library
-- **LegacyLibraryAdopter**: Adopts legacy libraries
-
-**Files**: `LibraryOpening.swift`
-
-### 5. Identity Persistence (Component 6)
-
-- **LibraryPathChangeDetector**: Detects library moves
-- **LibraryIdentifierLocator**: Locates libraries by identifier
-- **DuplicateIdentifierDetector**: Handles duplicate identifiers
-
-**Files**: `LibraryIdentityPersistence.swift`
-
-### 6. Validation (Component 7)
-
-- **LibraryValidator**: Comprehensive library validation
-- **LibraryCorruptionDetector**: Detects corruption scenarios
-- **LibraryValidationErrorMessageGenerator**: User-friendly error messages
-
-**Files**: `LibraryValidation.swift`
-
-### 7. Discovery (Component 3)
-
-- **LibraryDiscoverer**: Orchestrates library discovery
-- **KnownLocationTracker**: Tracks previously opened libraries
-- **PermissionErrorHandler**: Handles permission errors gracefully
-
-**Files**: `LibraryDiscovery.swift`
-
-## Usage Examples
-
-### Creating a Library
-
-```swift
-let creator = LibraryCreator()
-creator.createLibrary(at: "/path/to/library") { result in
-    switch result {
-    case .success(let metadata):
-        print("Library created with ID: \(metadata.libraryId)")
-    case .failure(let error):
-        print("Error: \(error.localizedDescription)")
-    }
-}
-```
-
-### Opening a Library
-
-```swift
-let opener = LibraryOpener()
-do {
-    let library = try opener.openLibrary(at: "/path/to/library")
-    print("Opened library: \(library.metadata.libraryId)")
-} catch {
-    print("Error: \(error.localizedDescription)")
-}
-```
-
-### Discovering Libraries
-
-```swift
-let discoverer = LibraryDiscoverer()
-do {
-    let libraries = try discoverer.discoverAll(specifiedPaths: ["/path/to/search"])
-    for library in libraries {
-        print("Found library: \(library.path)")
-    }
-} catch {
-    print("Error: \(error.localizedDescription)")
-}
-```
-
-## Library Structure
-
-A MediaHub library has the following structure:
-
-```
-LibraryRoot/
-└── .mediahub/
-    └── library.json
-```
-
-The `library.json` file contains:
-- `version`: Metadata format version
-- `libraryId`: Unique identifier (UUID v4)
-- `createdAt`: ISO-8601 creation timestamp
-- `libraryVersion`: MediaHub library version
-- `rootPath`: Absolute path to library root
-
-## Requirements Met
-
-This implementation addresses all P1 requirements from the specification:
-
-- ✅ FR-001: Create new library at user-specified path
-- ✅ FR-002: Store library metadata that makes library identifiable
-- ✅ FR-003: Assign unique identifier that persists across restarts
-- ✅ FR-004: Discover libraries at accessible locations
-- ✅ FR-005: Open library by identifier or path
-- ✅ FR-005a: Attach to existing library folders without re-import
-- ✅ FR-006: Maintain library identity across renames/moves
-- ✅ FR-007: Store metadata in transparent, human-readable format
-- ✅ FR-008: Validate library integrity when opening
-- ✅ FR-009: Prevent creating library inside existing library
-- ✅ FR-010: Support multiple independent libraries
-- ✅ FR-011: Define minimal, standard, future-compatible structure
-- ✅ FR-012: Preserve library identity when files modified externally
-
-## Success Criteria
-
-- ✅ SC-001: Library creation < 30 seconds
-- ✅ SC-002: Library opening < 2 seconds
-- ✅ SC-003: Library discovery < 5 seconds
-- ✅ SC-004: 100% identity persistence across moves/renames
-- ✅ SC-005: 100% success opening library after move
-- ✅ SC-006: 100% accuracy distinguishing multiple libraries
-- ✅ SC-007: Metadata readable by standard tools
-- ✅ SC-008: Files accessible without MediaHub
-
-## Building
-
-This is a Swift Package Manager project. To build:
-
+Build:
 ```bash
 swift build
 ```
 
-To run tests:
-
+Test:
 ```bash
 swift test
 ```
 
-## Design Decisions
+---
 
-Key design decisions are documented in:
+## Explicitly Out of Scope (As of Slice 3)
 
-- **ADR 001**: Library Metadata Specification (metadata format, identifier type, storage location)
-- **Library Structure Specification**: Minimum structure and naming conventions
-- **Path-to-Identifier Mapping Strategy**: How paths are tracked and updated
-- **Library Validation Rules**: What constitutes a valid library
-- **Discovery Scope**: What locations are searched in Slice 1
+- Photos.app or device‑specific integrations
+- User interface / media browsing
+- Advanced duplicate detection (hashing, fuzzy matching)
+- Metadata enrichment (tags, faces, albums)
+- Pipelines, automation, or scheduling
+- Cloud sync or backup features
 
-## Out of Scope (Slice 1)
+---
 
-The following are explicitly out of scope for Slice 1:
+## Roadmap (High‑Level)
 
-- Importing photos or videos
-- Source configuration (Photos.app, folders, devices)
-- Media organization (YYYY/MM or otherwise)
-- Pipelines of any kind
-- Metadata extraction or media indexing
-- Advanced UI or library management screens
-- Full filesystem scanning for discovery
-- Persistent registry storage (runtime only)
+- **Slice 4**: To be defined (e.g. UI enablement, pipelines, performance/indexing, Photos.app investigation)
 
-## Next Steps
-
-Future slices will build on this foundation:
-
-- **Slice 2**: Media import and organization
-- **Slice 3**: Pipeline system
-- **Slice 4**: Metadata extraction and indexing
-- **Slice 5**: User interface and library management
+---
 
 ## License
 
-[To be determined]
+To be determined
+
+---

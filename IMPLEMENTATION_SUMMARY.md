@@ -4,9 +4,21 @@
 **Status**: ✅ Complete  
 **Scope**: All P1 tasks from `specs/001-library-entity/tasks.md`
 
+> **Note**: This document covers **Slice 1 only**. As of the current project status, **Slices 1, 2, and 3 are all complete and validated**. See the [README.md](README.md) for the current project status.
+
+## Project Status Overview
+
+The MediaHub project has completed three major slices:
+
+- ✅ **Slice 1 — Library Entity & Identity** (this document)
+- ✅ **Slice 2 — Sources & Import Detection** (completed, see `specs/002-sources-import-detection/validation.md`)
+- ✅ **Slice 3 — Import Execution & Media Organization** (completed, see `specs/003-import-execution-media-organization/validation.md`)
+
+All three slices are frozen, tested, and covered by automated validation.
+
 ## Implementation Status
 
-All **Priority: P1** tasks have been implemented and tested. The codebase compiles successfully and basic tests pass.
+All **Priority: P1** tasks for Slice 1 have been implemented and tested. The codebase compiles successfully and basic tests pass.
 
 ## Completed Components
 
@@ -202,20 +214,56 @@ The following remain out of scope for Slice 1:
 
 ## Testing
 
-Basic unit tests are included:
+Slice 1 unit tests are included:
 - Metadata creation and validation
 - Identifier generation
+- Library structure validation
+- Library creation and opening
+- Identity persistence
+- Discovery functionality
 - All tests pass
 
-Additional integration tests can be added as needed.
+**Note**: With the completion of Slices 2 and 3, the test suite has expanded to 100+ tests covering all three slices.
+
+## Completed Slices (Post-Slice 1)
+
+### ✅ Slice 2 — Sources & Import Detection
+**Status**: Complete and validated  
+**Scope**: Attaching Sources to libraries and detecting new media items for import
+
+**Key Features**:
+- Folder-based Sources
+- Source-Library association persistence
+- Source validation and accessibility checking
+- Read-only, deterministic media detection
+- Library comparison to identify new items
+- Explainable detection results
+- Integration with Slice 1 library structure
+
+**Files**: `Source*.swift`, `LibraryComparison.swift`, `DetectionResult.swift`, `DetectionOrchestration.swift`  
+**Validation**: See `specs/002-sources-import-detection/validation.md`
+
+### ✅ Slice 3 — Import Execution & Media Organization
+**Status**: Complete and validated  
+**Scope**: Real media import with Year/Month organization
+
+**Key Features**:
+- Real media import (copy from Source to Library)
+- Deterministic Year/Month (YYYY/MM) organization
+- Timestamp extraction (EXIF DateTimeOriginal → mtime fallback)
+- Collision handling (rename / skip / error policies)
+- Atomic and interruption-safe import
+- Known-items tracking to prevent re-imports
+- Auditable import results
+- Integration with Slice 2 detection results
+
+**Files**: `ImportExecution.swift`, `ImportResult.swift`, `TimestampExtraction.swift`, `DestinationMapping.swift`, `CollisionHandling.swift`, `AtomicFileCopy.swift`, `KnownItemsTracking.swift`  
+**Validation**: See `specs/003-import-execution-media-organization/validation.md`
 
 ## Next Steps
 
-This implementation provides the foundation for:
-- **Slice 2**: Media import and organization
-- **Slice 3**: Pipeline system
-- **Slice 4**: Metadata extraction
-- **Slice 5**: User interface
+Future slices will build on the foundation of Slices 1-3:
+- **Slice 4**: To be defined (e.g., UI enablement, pipelines, performance/indexing, Photos.app investigation)
 
 ## Notes
 
@@ -238,11 +286,15 @@ swift test
 
 ## Documentation
 
-All design decisions are documented in:
+All Slice 1 design decisions are documented in:
 - `docs/adr/001-library-metadata-specification.md`
 - `docs/library-structure-specification.md`
 - `docs/path-to-identifier-mapping-strategy.md`
 - `docs/library-validation-rules.md`
 - `docs/discovery-scope-slice1.md`
 
-See `README.md` for usage examples and overview.
+**Additional ADRs** (Slices 2 and 3):
+- ADR 002-016: Covering Source management, detection, import execution, and media organization
+- See `docs/adr/` for complete list
+
+See `README.md` for current project overview and usage examples.
