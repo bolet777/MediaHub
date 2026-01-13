@@ -72,10 +72,25 @@ public struct DetectionOrchestrator {
             throw DetectionOrchestrationError.comparisonFailed(error)
         }
         
-        // Step 4: Compare candidates against Library contents
+        // Step 3.5: Query known items for this Source (import-detection integration)
+        let knownItemsPaths: Set<String>
+        do {
+            knownItemsPaths = try KnownItemsTracker.queryKnownItems(
+                sourceId: source.sourceId,
+                libraryRootURL: libraryRootURL
+            )
+        } catch {
+            // If known-items tracking fails, treat as empty set (graceful degradation)
+            knownItemsPaths = Set()
+        }
+        
+        // Combine Library paths and known items paths for comparison
+        let allKnownPaths = libraryPaths.union(knownItemsPaths)
+        
+        // Step 4: Compare candidates against Library contents and known items
         let comparisonResults = LibraryItemComparator.compareAll(
             candidates: sortedCandidates,
-            against: libraryPaths
+            against: allKnownPaths
         )
         
         // Step 5: Generate detection results with status and explanations
