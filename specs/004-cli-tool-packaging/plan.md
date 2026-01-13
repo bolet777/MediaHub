@@ -60,10 +60,12 @@ This plan adheres to the MediaHub Constitution:
 
 **Key Decisions**:
 - Which argument parsing library to use (Swift Argument Parser recommended)
-- CLI executable name (e.g., `mediahub`)
-- Package structure for CLI code (separate target or within MediaHub target)
+- CLI executable name: `mediahub` (user-facing command name)
+- Package structure for CLI code: **MUST be a separate executable target** (NOT within MediaHub library target)
+- CLI source directory: **MUST be `Sources/MediaHubCLI/`** (NOT `Sources/MediaHub/` or `Sources/mediahub/`) to avoid case-insensitive filesystem collisions on macOS
+- CLI entry point: **MUST be `Sources/MediaHubCLI/main.swift`** and **MUST NEVER exist under `Sources/MediaHub/`**
 - How to handle CLI installation (manual, Homebrew, or other distribution method)
-- Whether CLI should be a separate product or part of MediaHub library
+- CLI is a separate executable product (NOT part of MediaHub library)
 
 **Validation Points**:
 - CLI executable can be built successfully
@@ -72,10 +74,17 @@ This plan adheres to the MediaHub Constitution:
 - CLI executable is properly packaged and distributable
 
 **Risks & Open Questions**:
-- Should CLI be a separate Swift Package or part of MediaHub package?
+- ~~Should CLI be a separate Swift Package or part of MediaHub package?~~ **RESOLVED**: CLI is a separate executable target within MediaHub package (NOT part of MediaHub library target)
 - How to handle CLI installation and PATH setup?
 - Should CLI support version information (`--version`)?
 - How to ensure CLI executable is compatible across macOS versions?
+
+**NON-NEGOTIABLE CONSTRAINTS**:
+- CLI target MUST be a separate executable target (NOT part of MediaHub library target)
+- CLI source code MUST be in `Sources/MediaHubCLI/` (NOT `Sources/MediaHub/` or `Sources/mediahub/`)
+- CLI entry point `main.swift` MUST be at `Sources/MediaHubCLI/main.swift` and MUST NEVER exist under `Sources/MediaHub/`
+- NO files in `Sources/MediaHub/` may be deleted, moved, or renamed during Slice 4 implementation
+- If duplicates are found, STOP and report; do NOT delete or "clean up" files
 
 ---
 
@@ -139,12 +148,13 @@ This plan adheres to the MediaHub Constitution:
 - SC-011: CLI active library state is managed correctly (commands use the correct library context)
 
 **Key Decisions**:
-- How to specify active library (command-line argument vs. environment variable vs. both)
-- Argument name for library path (e.g., `--library`, `--lib`, `-L`)
-- Environment variable name (e.g., `MEDIAHUB_LIBRARY`)
-- Precedence when both argument and environment variable are provided
-- Whether to support library identifier in addition to path
+- How to specify active library: **BOTH command-line argument AND environment variable** (explicit per-invocation, stateless CLI)
+- Argument name for library path: `--library <path>`
+- Environment variable name: `MEDIAHUB_LIBRARY`
+- Precedence: **Command-line argument takes precedence over environment variable**
+- Whether to support library identifier in addition to path (out of scope for P1; use path only)
 - How to handle library path validation and error reporting
+- **CRITICAL**: CLI is stateless; no library state persists across invocations. Each command requiring library context MUST receive it explicitly.
 
 **Validation Points**:
 - Active library context is correctly resolved from arguments or environment variable
@@ -185,7 +195,7 @@ This plan adheres to the MediaHub Constitution:
 **Key Decisions**:
 - How to handle library creation errors (path exists, permission denied, etc.)
 - How to format library list output (table, list, JSON)
-- `library open` validates and displays library information but does not persist active library state; subsequent commands must receive the library context explicitly via argument or environment variable.
+- `library open` validates and displays library information but does NOT persist active library state. The CLI is stateless: subsequent commands MUST receive the library context explicitly via `--library` argument or `MEDIAHUB_LIBRARY` environment variable.
 - How to display library information in list command (path, identifier, metadata)
 - Whether to support library validation in create/open commands
 
@@ -726,7 +736,7 @@ The components should be implemented in the following order to manage dependenci
    - How to handle import when detection result is stale or missing?
 
 10. **CLI Code Organization**
-    - Should CLI code be in a separate module or within MediaHub target?
+    - ~~Should CLI code be in a separate module or within MediaHub target?~~ **RESOLVED**: CLI code MUST be in a separate executable target with source code in `Sources/MediaHubCLI/` (NOT within MediaHub library target)
     - How to structure CLI code to avoid duplicating core logic?
     - Should CLI have its own test suite or rely on core tests?
 
@@ -852,7 +862,7 @@ Each success criterion must be validated:
 - Each component should be independently testable where possible
 - CLI must maintain deterministic behavior consistent with programmatic API
 - CLI is a thin orchestration and presentation layer; no business logic should be embedded in CLI code
-- CLI commands must be stateless and independent (except for active library context, which is explicit per-invocation for P1)
+- CLI commands MUST be stateless and independent. Active library context is explicit per-invocation for P1 (via `--library` argument or `MEDIAHUB_LIBRARY` environment variable). No library state persists across CLI invocations.
 - Error handling in CLI should map existing error types to user-friendly messages without changing core error behavior
 - CLI output formats (human-readable and JSON) must be standard and scriptable
 - Progress indicators are stage-based and item-count-based for P1; percentage calculations and time estimates are out of scope

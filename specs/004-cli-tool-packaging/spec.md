@@ -18,7 +18,7 @@ A user wants to create new MediaHub libraries and open existing libraries from t
 **Acceptance Scenarios**:
 
 1. **Given** a user wants to create a new library, **When** they run `mediahub library create <path>`, **Then** MediaHub creates a new library at the specified path and reports success
-2. **Given** a user wants to open an existing library, **When** they run `mediahub library open <path>`, **Then** MediaHub opens the library and sets it as the active library for subsequent commands
+2. **Given** a user wants to open an existing library, **When** they run `mediahub library open <path>`, **Then** MediaHub opens the library and displays library information (does not persist active library state; subsequent commands require explicit `--library` argument or environment variable)
 3. **Given** a user wants to see all known libraries, **When** they run `mediahub library list`, **Then** MediaHub lists all discoverable libraries with their paths and identifiers
 4. **Given** a user attempts to create a library at an invalid path, **When** the creation fails, **Then** MediaHub reports a clear, actionable error message explaining why creation failed
 5. **Given** a user attempts to open a library that doesn't exist, **When** the opening fails, **Then** MediaHub reports a clear error message indicating the library was not found
@@ -27,19 +27,19 @@ A user wants to create new MediaHub libraries and open existing libraries from t
 
 ### User Story 2 - Attach and List Sources via CLI (Priority: P1)
 
-A user wants to attach folder-based Sources to their active library and list attached Sources from the command line. The CLI should validate Source paths and provide clear feedback about attachment operations.
+A user wants to attach folder-based Sources to a library and list attached Sources from the command line. The CLI should validate Source paths and provide clear feedback about attachment operations. Each command requires explicit library context via `--library` argument or `MEDIAHUB_LIBRARY` environment variable.
 
 **Why this priority**: Source attachment is required before detection can be performed. Without CLI support for attaching Sources, users cannot proceed with the detection workflow.
 
-**Independent Test**: Can be fully tested by attaching a Source to an active library via CLI, listing attached Sources, and verifying the association persists. This delivers the core capability of Source management via CLI.
+**Independent Test**: Can be fully tested by attaching a Source to a library (with explicit `--library` context) via CLI, listing attached Sources, and verifying the association persists. This delivers the core capability of Source management via CLI.
 
 **Acceptance Scenarios**:
 
-1. **Given** a user has an active library, **When** they run `mediahub source attach <path>`, **Then** MediaHub validates the Source path, attaches it to the library, and reports success
-2. **Given** a user wants to see attached Sources, **When** they run `mediahub source list`, **Then** MediaHub lists all Sources attached to the active library with their paths and identifiers
+1. **Given** a user provides library context via `--library` argument or `MEDIAHUB_LIBRARY` environment variable, **When** they run `mediahub source attach <path> --library <path>`, **Then** MediaHub validates the Source path, attaches it to the library, and reports success
+2. **Given** a user provides library context via `--library` argument or `MEDIAHUB_LIBRARY` environment variable, **When** they run `mediahub source list --library <path>`, **Then** MediaHub lists all Sources attached to the library with their paths and identifiers
 3. **Given** a user attempts to attach an invalid Source path, **When** the attachment fails, **Then** MediaHub reports a clear error message explaining why attachment failed (path doesn't exist, permission denied, etc.)
-4. **Given** a user attempts to attach a Source when no library is active, **When** the command runs, **Then** MediaHub reports a clear error indicating that a library must be opened first
-5. **Given** a user attaches a Source, **When** they close and reopen the CLI session, **Then** the Source association persists and is visible in `mediahub source list`
+4. **Given** a user attempts to attach a Source when no library context is provided, **When** the command runs, **Then** MediaHub reports a clear error indicating that a library must be provided via `--library` argument or `MEDIAHUB_LIBRARY` environment variable
+5. **Given** a user attaches a Source, **When** they run `mediahub source list` with the same library context (via `--library` argument or environment variable), **Then** the Source association persists and is visible in `mediahub source list` (Source associations are stored in the library, not in CLI state)
 
 ---
 
@@ -53,7 +53,7 @@ A user wants to run detection on an attached Source from the command line to dis
 
 **Acceptance Scenarios**:
 
-1. **Given** a user has an attached Source, **When** they run `mediahub detect <source-id>`, **Then** MediaHub runs detection on the Source and displays a summary of candidate items found
+1. **Given** a user has an attached Source and provides library context via `--library` argument or `MEDIAHUB_LIBRARY` environment variable, **When** they run `mediahub detect <source-id> --library <path>`, **Then** MediaHub runs detection on the Source and displays a summary of candidate items found
 2. **Given** a user runs detection, **When** detection is in progress, **Then** MediaHub displays progress feedback (e.g., "Scanning source...", "Comparing with library...", "Found N candidates")
 3. **Given** a user runs detection, **When** detection completes, **Then** MediaHub displays results showing the number of new candidate items, known items excluded, and any errors encountered
 4. **Given** a user runs detection with `--json` flag, **When** detection completes, **Then** MediaHub outputs results in JSON format suitable for scripting
@@ -71,7 +71,7 @@ A user wants to import candidate items from a detection result into their librar
 
 **Acceptance Scenarios**:
 
-1. **Given** a user has run detection and has candidate items, **When** they run `mediahub import <source-id> --all`, **Then** MediaHub imports all detected candidate items for the specified Source and displays a summary of imported, skipped, and failed items
+1. **Given** a user has run detection and has candidate items, and provides library context via `--library` argument or `MEDIAHUB_LIBRARY` environment variable, **When** they run `mediahub import <source-id> --all --library <path>`, **Then** MediaHub imports all detected candidate items for the specified Source and displays a summary of imported, skipped, and failed items
 2. **Given** a user runs import, **When** import is in progress, **Then** MediaHub displays progress feedback (e.g., "Importing item 1 of N...", "Copying file...")
 3. **Given** a user runs import, **When** import completes, **Then** MediaHub displays results showing what was imported, what was skipped (with reasons), and what failed (with error messages)
 4. **Given** a user runs import with `--json` flag, **When** import completes, **Then** MediaHub outputs results in JSON format suitable for scripting
@@ -83,7 +83,7 @@ A user wants to import candidate items from a detection result into their librar
 
 ### User Story 5 - View Library Status and Get Help via CLI (Priority: P1)
 
-A user wants to check the status of their active library and get help about CLI commands. The CLI should provide a status command showing the active library and its state, and a comprehensive help system for all commands.
+A user wants to check the status of a library and get help about CLI commands. The CLI should provide a status command showing the library and its state (with explicit library context via `--library` argument or `MEDIAHUB_LIBRARY` environment variable), and a comprehensive help system for all commands.
 
 **Why this priority**: Status and help are essential for CLI usability. Users need to know what library is active and how to use commands effectively.
 
@@ -91,17 +91,17 @@ A user wants to check the status of their active library and get help about CLI 
 
 **Acceptance Scenarios**:
 
-1. **Given** a user wants to check their active library, **When** they run `mediahub status`, **Then** MediaHub displays the active library path, identifier, and basic information (number of sources, last detection time, etc.)
+1. **Given** a user provides library context via `--library` argument or `MEDIAHUB_LIBRARY` environment variable, **When** they run `mediahub status --library <path>`, **Then** MediaHub displays the library path, identifier, and basic information (number of sources, last detection time, etc.)
 2. **Given** a user wants help with a command, **When** they run `mediahub <command> --help`, **Then** MediaHub displays comprehensive help text explaining the command, its options, and usage examples
 3. **Given** a user runs `mediahub --help`, **When** the command executes, **Then** MediaHub displays an overview of all available commands and their purposes
-4. **Given** a user runs status when no library is active, **When** the command executes, **Then** MediaHub clearly indicates that no library is currently active
+4. **Given** a user runs status when no library context is provided, **When** the command executes, **Then** MediaHub clearly indicates that a library must be provided via `--library` argument or `MEDIAHUB_LIBRARY` environment variable
 5. **Given** a user wants help with a subcommand, **When** they run `mediahub library create --help`, **Then** MediaHub displays help specific to that subcommand
 
 ---
 
 ### Edge Cases
 
-- What happens when a user runs CLI commands without an active library?
+- What happens when a user runs CLI commands without providing library context (no `--library` argument or `MEDIAHUB_LIBRARY` environment variable)?
 - What happens when a user runs CLI commands with an invalid library path?
 - What happens when a user runs detection or import on a Source that becomes inaccessible during the operation?
 - What happens when a user runs CLI commands in a non-interactive environment (scripting)?
@@ -112,20 +112,20 @@ A user wants to check the status of their active library and get help about CLI 
 - What happens when a user runs CLI commands on a library that has been moved or renamed?
 - What happens when a user runs CLI commands with insufficient permissions?
 - What happens when a user runs CLI commands with invalid Source identifiers?
-- What happens when a user runs import with item paths that don't match detection results?
+- What happens when a user runs import with invalid source-id or when no detection has been run? (Note: P1 supports `--all` only; fine-grained item selection is P2)
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: MediaHub MUST provide an executable CLI target in the Swift Package
+- **FR-001**: MediaHub MUST provide an executable CLI target in the Swift Package. The CLI target MUST be a separate executable target (NOT part of the MediaHub library target). The CLI source code MUST be located in `Sources/MediaHubCLI/` (NOT `Sources/MediaHub/` or `Sources/mediahub/`). The entry point `main.swift` MUST be located at `Sources/MediaHubCLI/main.swift` and MUST NEVER exist under `Sources/MediaHub/`.
 - **FR-002**: MediaHub MUST support creating libraries via CLI command `mediahub library create <path>`
-- **FR-003**: MediaHub MUST support opening libraries via CLI command `mediahub library open <path>` and setting the opened library as active for subsequent commands
+- **FR-003**: MediaHub MUST support opening libraries via CLI command `mediahub library open <path>` and displaying library information. The command does NOT persist active library state across CLI invocations. Each CLI command invocation is stateless and requires explicit library context via `--library` argument or `MEDIAHUB_LIBRARY` environment variable.
 - **FR-004**: MediaHub MUST support listing discoverable libraries via CLI command `mediahub library list`
-- **FR-005**: MediaHub MUST support attaching Sources to the active library via CLI command `mediahub source attach <path>`
-- **FR-006**: MediaHub MUST support listing attached Sources for the active library via CLI command `mediahub source list`
-- **FR-007**: MediaHub MUST support running detection on a Source via CLI command `mediahub detect <source-id>`
-- **FR-008**: MediaHub MUST support importing selected items from detection results via CLI command `mediahub import <source-id> --items <paths>`
+- **FR-005**: MediaHub MUST support attaching Sources to a library via CLI command `mediahub source attach <path>`. The library context MUST be provided explicitly via `--library` argument or `MEDIAHUB_LIBRARY` environment variable.
+- **FR-006**: MediaHub MUST support listing attached Sources for a library via CLI command `mediahub source list`. The library context MUST be provided explicitly via `--library` argument or `MEDIAHUB_LIBRARY` environment variable.
+- **FR-007**: MediaHub MUST support running detection on a Source via CLI command `mediahub detect <source-id>`. The library context MUST be provided explicitly via `--library` argument or `MEDIAHUB_LIBRARY` environment variable.
+- **FR-008**: MediaHub MUST support importing all detected items from detection results via CLI command `mediahub import <source-id> --all`. For P1, only `--all` flag is supported; fine-grained item selection (e.g., `--items <paths>`) is out of scope and deferred to P2.
 - **FR-009**: MediaHub MUST support viewing library status via CLI command `mediahub status`
 - **FR-010**: MediaHub MUST provide a help system accessible via `--help` flag for all commands and subcommands
 - **FR-011**: MediaHub MUST support human-readable output format by default for all CLI commands
@@ -135,7 +135,7 @@ A user wants to check the status of their active library and get help about CLI 
 - **FR-015**: MediaHub MUST map existing error types to clear CLI error messages
 - **FR-016**: MediaHub MUST support non-interactive usage (scriptable mode) where commands do not prompt for user input
 - **FR-017**: MediaHub MUST use Swift Argument Parser or equivalent for CLI argument parsing and help generation
-- **FR-018**: MediaHub MUST support an explicit active library context provided per CLI invocation (e.g., command-line argument or environment variable)
+- **FR-018**: MediaHub MUST support an explicit active library context provided per CLI invocation (e.g., command-line argument `--library <path>` or environment variable `MEDIAHUB_LIBRARY`). The CLI is stateless: no library state persists across invocations. Each command that requires a library context MUST receive it explicitly via argument or environment variable.
 - **FR-019**: MediaHub MUST validate CLI command arguments and report clear errors for invalid inputs
 - **FR-020**: MediaHub MUST ensure CLI commands can be used in scripts without requiring user interaction
 - **FR-021**: MediaHub MUST provide appropriate exit codes (0 for success, non-zero for errors) for scriptability
@@ -148,7 +148,7 @@ A user wants to check the status of their active library and get help about CLI 
 
 - **CLI Command**: A single executable command in the MediaHub CLI (e.g., `mediahub library create`). Commands are structured hierarchically with top-level commands and subcommands. Each command has a clear purpose, accepts arguments and options, and produces output in human-readable or JSON format.
 
--- **Active Library**: The currently selected library for CLI operations. The active library is used as the context for Source attachment, detection, and import operations. For P1, the active library context is provided explicitly per CLI invocation (via command-line argument or environment variable). No implicit or persisted active-library state is maintained across CLI invocations in P1.
+-- **Active Library**: The library context for CLI operations, provided explicitly per CLI invocation. The active library is used as the context for Source attachment, detection, and import operations. For P1, the active library context MUST be provided explicitly per CLI invocation (via `--library <path>` command-line argument or `MEDIAHUB_LIBRARY` environment variable). No implicit or persisted active-library state is maintained across CLI invocations in P1. The CLI is stateless: each command invocation is independent and requires explicit library context.
 
 -- **CLI Output Format**: The format in which CLI commands present results to users. Two formats are supported: human-readable (default) for interactive use, and JSON (via `--json` flag) for scripting and automation. Human-readable format uses tables, lists, and structured text. JSON format uses standard JSON serialization of result models. For P1, JSON output is only required for commands that produce structured result data; help and purely informational commands may remain human-readable only.
 
@@ -172,7 +172,7 @@ A user wants to check the status of their active library and get help about CLI 
 - **SC-008**: CLI progress indicators provide meaningful feedback during long-running operations (detection, import)
 - **SC-009**: CLI commands maintain deterministic behavior (same inputs produce same outputs) consistent with programmatic API
 - **SC-010**: All existing core tests still pass after CLI implementation (no regression in core functionality)
-- **SC-011**: CLI active library state is managed correctly (commands use the correct library context)
+- **SC-011**: CLI library context is managed correctly (commands receive and use the correct library context provided explicitly per invocation)
 - **SC-012**: CLI commands validate arguments and report clear errors for invalid inputs within 1 second
 - **SC-013**: CLI help system is accessible for all commands and subcommands (100% coverage)
 
@@ -181,7 +181,11 @@ A user wants to check the status of their active library and get help about CLI 
 - CLI will be used primarily on macOS (Swift Package executable)
 - Users have basic familiarity with command-line interfaces
 - CLI will be invoked from terminal environments (Terminal.app, iTerm, scripts)
-- Active library context is provided explicitly per CLI invocation; persistent CLI state is out of scope for P1.
+- Active library context is provided explicitly per CLI invocation; persistent CLI state is out of scope for P1
+- CLI target is a separate executable target (NOT part of the MediaHub library target)
+- CLI source code is located in `Sources/MediaHubCLI/` (NOT `Sources/MediaHub/` or `Sources/mediahub/`) to avoid case-insensitive filesystem collisions on macOS
+- CLI entry point `main.swift` is located at `Sources/MediaHubCLI/main.swift` and MUST NEVER exist under `Sources/MediaHub/`
+- No files in `Sources/MediaHub/` (the library target) may be deleted, moved, or renamed during Slice 4 implementation
 - Swift Argument Parser or equivalent library is available for CLI argument parsing
 - CLI output will be displayed in terminal environments that support standard output and error streams
 - Long-running operations (detection, import) may be interrupted by user (Ctrl+C), and CLI should handle interruption gracefully
@@ -191,5 +195,5 @@ A user wants to check the status of their active library and get help about CLI 
 - CLI commands will reuse existing MediaHub core APIs without modification
 - Core MediaHub behavior (determinism, safety, transparency) must be preserved when accessed via CLI
 - CLI is a thin orchestration and presentation layer; no business logic should be embedded in CLI code
-- CLI commands may be chained or used in scripts, so each command must be independent and stateless (except for active library context)
+- CLI commands may be chained or used in scripts, so each command must be independent and stateless. Library context must be provided explicitly per command invocation (via `--library` argument or `MEDIAHUB_LIBRARY` environment variable); no state persists across invocations.
 - Error handling in CLI should map existing error types to user-friendly messages without changing core error behavior

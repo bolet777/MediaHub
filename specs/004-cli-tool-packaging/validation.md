@@ -6,6 +6,44 @@
 **Tasks**: `specs/004-cli-tool-packaging/tasks.md`  
 **Created**: 2026-01-13
 
+## Structure Sanity Validation (MUST RUN BEFORE BUILD)
+
+**CRITICAL**: These validations MUST pass before attempting to build. If any fail, STOP and fix the structure issues.
+
+### Structure Validation 1: CLI Entry Point Location
+- **Check**: Verify `Sources/MediaHubCLI/main.swift` exists
+- **Command**: `test -f Sources/MediaHubCLI/main.swift && echo "PASS: CLI entry point exists" || echo "FAIL: CLI entry point missing"`
+- **Expected**: `PASS: CLI entry point exists`
+- **Status**: ⬜ TODO
+
+### Structure Validation 2: No main.swift in Library Target
+- **Check**: Verify `Sources/MediaHub/` has NO main.swift
+- **Command**: `test ! -f Sources/MediaHub/main.swift && echo "PASS: No main.swift in library target" || echo "FAIL: main.swift found in library target (FORBIDDEN)"`
+- **Expected**: `PASS: No main.swift in library target`
+- **Status**: ⬜ TODO
+
+### Structure Validation 3: Package.swift Has Separate Executable Target
+- **Check**: Verify Package.swift has separate executable target (not part of library target)
+- **Command**: `grep -q "executableTarget.*mediahub" Package.swift && echo "PASS: Executable target found" || echo "FAIL: Executable target missing or incorrect"`
+- **Expected**: `PASS: Executable target found`
+- **Status**: ⬜ TODO
+
+### Structure Validation 4: No Ambiguous CLI Directory
+- **Check**: Verify `Sources/mediahub/` does NOT exist (or is empty/ignored) to avoid case-insensitive filesystem collisions with `Sources/MediaHub/` on macOS
+- **Command**: `test ! -d Sources/mediahub && echo "PASS: No ambiguous mediahub directory" || (test -z "$(find Sources/mediahub -type f 2>/dev/null)" && echo "PASS: mediahub directory exists but is empty" || echo "FAIL: Sources/mediahub/ exists with files (FORBIDDEN - use Sources/MediaHubCLI/ instead)")`
+- **Expected**: `PASS: No ambiguous mediahub directory` or `PASS: mediahub directory exists but is empty`
+- **Status**: ⬜ TODO
+
+### Structure Validation 5: No Duplicate Files
+- **Check**: Verify no duplicate files exist that would cause confusion
+- **Command**: `find Sources -name "*.swift" -type f | sort | uniq -d | wc -l | xargs -I {} test {} -eq 0 && echo "PASS: No duplicate files" || echo "FAIL: Duplicate files found"`
+- **Expected**: `PASS: No duplicate files`
+- **Status**: ⬜ TODO
+
+**If any structure validation fails, DO NOT proceed with build. Fix structure issues first.**
+
+---
+
 ## CLI Smoke Test Checklist
 
 This checklist provides a quick validation that the CLI tool is properly built, functional, and can execute a basic end-to-end workflow.
@@ -15,8 +53,9 @@ This checklist provides a quick validation that the CLI tool is properly built, 
 #### 1. Swift Build
 - **Command**: `swift build`
 - **Expected**: Build succeeds without errors
-- **Validation**: CLI executable target builds successfully
+- **Validation**: CLI executable target builds successfully; library target builds successfully; no "library product contains executable target" errors
 - **Status**: ⬜ TODO
+- **Prerequisite**: All Structure Sanity Validations (above) must pass
 
 #### 2. Swift Test
 - **Command**: `swift test`
@@ -27,8 +66,9 @@ This checklist provides a quick validation that the CLI tool is properly built, 
 #### 3. CLI Help System
 - **Command**: `swift run mediahub --help`
 - **Expected**: Displays overview of all available commands
-- **Validation**: Help system is accessible and comprehensive
+- **Validation**: Help system is accessible and comprehensive; executable runs without "library product contains executable target" errors
 - **Status**: ⬜ TODO
+- **Prerequisite**: Structure Sanity Validations must pass
 
 #### 4. Command Help System
 - **Command**: `swift run mediahub library --help`
@@ -814,7 +854,15 @@ swift run mediahub import <source-id> --all --library /tmp/test-library > output
 ## Build and Run Examples
 
 ### Build CLI Executable
+
+**IMPORTANT**: Run Structure Sanity Validation (above) BEFORE building.
+
 ```bash
+# First, validate structure
+test -f Sources/MediaHubCLI/main.swift && echo "✓ CLI entry point exists" || echo "✗ CLI entry point missing"
+test ! -f Sources/MediaHub/main.swift && echo "✓ No main.swift in library target" || echo "✗ main.swift found in library target (FORBIDDEN)"
+
+# Then build
 swift build
 ```
 
@@ -879,9 +927,21 @@ swift run mediahub source list --library /tmp/other-library
 
 ## Notes
 
+- **CRITICAL**: Structure Sanity Validation (above) MUST pass before attempting to build
 - All validation items should be checked off (✅) as they are completed
 - CLI smoke test checklist provides quick validation of basic functionality
 - Success criteria validation ensures all requirements are met
 - Acceptance scenarios validation ensures all user stories are satisfied
 - Edge case testing ensures robustness and error handling
 - Build and run examples provide practical usage guidance
+
+## Structure Validation Failures
+
+If structure validation fails:
+1. **DO NOT** proceed with build
+2. **DO NOT** delete, move, or rename files in `Sources/MediaHub/`
+3. **DO NOT** create `main.swift` under `Sources/MediaHub/`
+4. **DO** verify CLI code is in `Sources/MediaHubCLI/`
+5. **DO** verify `main.swift` is at `Sources/MediaHubCLI/main.swift`
+6. **DO** verify Package.swift has separate executable target
+7. **DO** report any duplicate files found (do NOT delete them)

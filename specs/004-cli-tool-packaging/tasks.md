@@ -14,6 +14,29 @@ Tasks are organized by component and follow the implementation sequence defined 
 - Traceable to plan components (referenced by component number)
 - Includes only P1 scope: stateless CLI tool with explicit library context, library/source/detect/import/status commands, human-readable and JSON output, progress indicators, error handling, and help system
 
+## NON-NEGOTIABLE CONSTRAINTS FOR SLICE 4
+
+**CRITICAL**: The following constraints MUST be followed during Slice 4 implementation:
+
+1. **CLI Target Structure**:
+   - CLI MUST be a separate executable target (NOT part of MediaHub library target)
+   - CLI source code MUST be in `Sources/MediaHubCLI/` (NOT `Sources/MediaHub/` or `Sources/mediahub/`)
+   - CLI entry point `main.swift` MUST be at `Sources/MediaHubCLI/main.swift`
+   - `main.swift` MUST NEVER exist under `Sources/MediaHub/`
+
+2. **File Protection**:
+   - NO files in `Sources/MediaHub/` may be deleted, moved, or renamed during Slice 4
+   - If duplicates are found, STOP and report; do NOT delete or "clean up" files
+   - NO "deduplication" or "cleanup" operations on existing files
+
+3. **Stateless CLI**:
+   - CLI is stateless: no library state persists across invocations
+   - Each command requiring library context MUST receive it explicitly via `--library` argument or `MEDIAHUB_LIBRARY` environment variable
+   - Remove any wording implying "active library persists across commands"
+
+4. **Case-Sensitivity**:
+   - Use `Sources/MediaHubCLI/` (NOT `Sources/mediahub/`) to avoid case-insensitive filesystem collisions with `Sources/MediaHub/` on macOS
+
 ---
 
 ## Component 1: CLI Executable Target & Package Structure
@@ -30,17 +53,19 @@ Tasks are organized by component and follow the implementation sequence defined 
 
 ### Task 1.2: Add CLI Executable Target to Package.swift
 **Priority**: P1
-- **Objective**: Add executable target named `mediahub` to Package.swift with dependency on MediaHub library
+- **Objective**: Add executable target named `mediahub` to Package.swift with dependency on MediaHub library. The CLI target MUST be a separate executable target (NOT part of the MediaHub library target).
 - **Deliverable**: Updated Package.swift with executable target
 - **Traceability**: Plan Component 1, Responsibility: "Add executable target to Package.swift" and Key Decision: "CLI executable name (e.g., `mediahub`)" and FR-001
-- **Acceptance**: Package.swift includes `mediahub` executable target; target depends on MediaHub library; supports FR-001
+- **Acceptance**: Package.swift includes `mediahub` executable target as a separate target (NOT part of MediaHub library target); target depends on MediaHub library; supports FR-001
+- **CRITICAL CONSTRAINT**: The executable target MUST have its source code in `Sources/MediaHubCLI/` (NOT `Sources/MediaHub/` or `Sources/mediahub/`)
 
 ### Task 1.3: Create CLI Entry Point Structure
 **Priority**: P1
-- **Objective**: Create main.swift file as CLI entry point with basic command structure setup
-- **Deliverable**: CLI entry point file (main.swift or equivalent)
+- **Objective**: Create main.swift file as CLI entry point with basic command structure setup. The entry point MUST be located at `Sources/MediaHubCLI/main.swift` and MUST NEVER exist under `Sources/MediaHub/`.
+- **Deliverable**: CLI entry point file at `Sources/MediaHubCLI/main.swift`
 - **Traceability**: Plan Component 1, Responsibility: "Create main CLI entry point" and "Establish CLI command structure and hierarchy"
-- **Acceptance**: Entry point file exists; basic structure is established; can be built successfully
+- **Acceptance**: Entry point file exists at `Sources/MediaHubCLI/main.swift`; basic structure is established; can be built successfully; NO main.swift exists under `Sources/MediaHub/`
+- **CRITICAL CONSTRAINT**: main.swift MUST be at `Sources/MediaHubCLI/main.swift` and MUST NEVER be created under `Sources/MediaHub/` (library target must not contain executable entry point)
 
 ### Task 1.4: Implement Basic Root Command
 **Priority**: P1
@@ -51,10 +76,11 @@ Tasks are organized by component and follow the implementation sequence defined 
 
 ### Task 1.5: Validate CLI Build and Execution
 **Priority**: P1
-- **Objective**: Verify CLI executable can be built and executed from command line
+- **Objective**: Verify CLI executable can be built and executed from command line. Validate that structure is correct: `Sources/MediaHubCLI/main.swift` exists, `Sources/MediaHub/` has NO main.swift, and Package.swift has separate executable target.
 - **Deliverable**: Validated CLI build and execution
 - **Traceability**: Plan Component 1, Validation Point: "CLI executable can be built successfully" and "CLI executable can be run from command line"
-- **Acceptance**: `swift build` succeeds; `swift run mediahub` executes; CLI responds to basic commands
+- **Acceptance**: `swift build` succeeds; `swift run mediahub` executes; CLI responds to basic commands; structure validation passes (Sources/MediaHubCLI/main.swift exists, Sources/MediaHub/ has NO main.swift, executable target is separate from library target)
+- **CRITICAL VALIDATION**: Before building, verify: (1) `Sources/MediaHubCLI/main.swift` exists, (2) `Sources/MediaHub/` has NO main.swift, (3) Package.swift has separate executable target
 
 ---
 
@@ -121,10 +147,10 @@ Tasks are organized by component and follow the implementation sequence defined 
 
 ### Task 3.1: Design Active Library Context Resolution Strategy
 **Priority**: P1
-- **Objective**: Document strategy for resolving active library context from command-line argument or environment variable
+- **Objective**: Document strategy for resolving active library context from command-line argument or environment variable. The CLI is stateless: no library state persists across invocations. Each command requiring library context MUST receive it explicitly.
 - **Deliverable**: Active library context resolution strategy documentation
 - **Traceability**: Plan Component 3, Key Decision: "How to specify active library (command-line argument vs. environment variable vs. both)" and "Precedence when both argument and environment variable are provided" and FR-018
-- **Acceptance**: Strategy defines argument name (--library), environment variable name (MEDIAHUB_LIBRARY), and precedence rules
+- **Acceptance**: Strategy defines argument name (--library), environment variable name (MEDIAHUB_LIBRARY), precedence rules (argument overrides environment variable), and explicitly states CLI is stateless (no persistent state across invocations)
 
 ### Task 3.2: Implement Library Context Argument Parsing
 **Priority**: P1
