@@ -360,3 +360,109 @@ struct StatusFormatter: OutputFormatter {
         return jsonString
     }
 }
+
+/// Formats library adoption success output
+struct LibraryAdoptionFormatter: OutputFormatter {
+    let result: LibraryAdoptionResult
+    let outputFormat: OutputFormat
+    let dryRun: Bool
+    
+    func format() -> String {
+        switch outputFormat {
+        case .humanReadable:
+            return formatHumanReadable()
+        case .json:
+            return formatJSON()
+        }
+    }
+    
+    private func formatHumanReadable() -> String {
+        var output = ""
+        if dryRun {
+            output += "DRY-RUN: Library adoption preview\n"
+            output += "==================================\n\n"
+            output += "Would create:\n"
+            output += "  Library ID: \(result.metadata.libraryId)\n"
+            output += "  Metadata location: \(result.metadata.rootPath)/.mediahub/library.json\n"
+            output += "\nBaseline scan summary:\n"
+            output += "  Files found: \(result.baselineScan.fileCount)\n"
+            output += "\n"
+            output += "Note: No files will be created; this is a preview only.\n"
+        } else {
+            output += "Library adopted successfully\n"
+            output += "===========================\n\n"
+            output += "Library ID: \(result.metadata.libraryId)\n"
+            output += "Metadata location: \(result.metadata.rootPath)/.mediahub/library.json\n"
+            output += "\nBaseline scan summary:\n"
+            output += "  Files found: \(result.baselineScan.fileCount)\n"
+            output += "\n"
+            output += "Note: No media files were modified; only .mediahub metadata was created.\n"
+        }
+        return output
+    }
+    
+    private func formatJSON() -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
+        struct AdoptionOutput: Codable {
+            let dryRun: Bool
+            let metadata: LibraryMetadata
+            let baselineScan: BaselineScanSummary
+        }
+        
+        let output = AdoptionOutput(
+            dryRun: dryRun,
+            metadata: result.metadata,
+            baselineScan: result.baselineScan
+        )
+        
+        guard let data = try? encoder.encode(output),
+              let jsonString = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        
+        return jsonString
+    }
+}
+
+/// Formats idempotent adoption output (library already adopted)
+struct LibraryAdoptionIdempotentFormatter: OutputFormatter {
+    let path: String
+    let outputFormat: OutputFormat
+    
+    func format() -> String {
+        switch outputFormat {
+        case .humanReadable:
+            return formatHumanReadable()
+        case .json:
+            return formatJSON()
+        }
+    }
+    
+    private func formatHumanReadable() -> String {
+        return "Library is already adopted at: \(path)\n"
+    }
+    
+    private func formatJSON() -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
+        struct IdempotentOutput: Codable {
+            let alreadyAdopted: Bool
+            let path: String
+        }
+        
+        let output = IdempotentOutput(
+            alreadyAdopted: true,
+            path: path
+        )
+        
+        guard let data = try? encoder.encode(output),
+              let jsonString = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        
+        return jsonString
+    }
+}

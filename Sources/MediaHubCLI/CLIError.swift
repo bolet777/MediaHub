@@ -86,6 +86,10 @@ struct ErrorFormatter {
             return formatImportError(importError)
         }
         
+        if let adoptionError = error as? LibraryAdoptionError {
+            return formatAdoptionError(adoptionError)
+        }
+        
         // Fall back to localized description
         if let localizedError = error as? LocalizedError {
             return localizedError.errorDescription ?? error.localizedDescription
@@ -230,6 +234,27 @@ struct ErrorFormatter {
             return "Import completed but failed to update tracking. Library integrity preserved. Error: \(error.localizedDescription). You may need to run detection again."
         case .resultStorageFailed(let error):
             return "Import completed but failed to store result. Library integrity preserved. Error: \(error.localizedDescription). Imported files are safe."
+        }
+    }
+    
+    private static func formatAdoptionError(_ error: LibraryAdoptionError) -> String {
+        switch error {
+        case .invalidPath:
+            return "Invalid library path"
+        case .pathDoesNotExist:
+            return "Path does not exist"
+        case .pathIsNotDirectory:
+            return "Path is not a directory"
+        case .permissionDenied:
+            return "Permission denied accessing path"
+        case .alreadyAdopted:
+            return "Library is already adopted"
+        case .metadataCreationFailed(let error):
+            return "Failed to create metadata: \(error.localizedDescription)"
+        case .metadataWriteFailed(let error):
+            return "Failed to write metadata: \(error.localizedDescription)"
+        case .rollbackFailed(let error):
+            return "Failed to rollback adoption: \(error.localizedDescription)"
         }
     }
 }
