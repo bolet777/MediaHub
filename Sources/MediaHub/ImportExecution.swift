@@ -47,6 +47,7 @@ public struct ImportExecutor {
     ///   - libraryRootURL: Library root URL
     ///   - libraryId: Library identifier
     ///   - options: Import options (collision policy, etc.)
+    ///   - dryRun: If true, preview import operations without copying files (default: false)
     ///   - fileOperations: File operations implementation (default: FileManager)
     /// - Returns: ImportResult with results for all items
     /// - Throws: `ImportExecutionError` if import fails
@@ -56,6 +57,7 @@ public struct ImportExecutor {
         libraryRootURL: URL,
         libraryId: String,
         options: ImportOptions,
+        dryRun: Bool = false,
         fileOperations: FileOperationsProtocol = DefaultFileOperations()
     ) throws -> ImportResult {
         // Validate inputs
@@ -94,13 +96,15 @@ public struct ImportExecutor {
                 item: item,
                 libraryRootURL: libraryRootURL,
                 options: options,
+                dryRun: dryRun,
                 fileOperations: fileOperations
             )
             
             importItemResults.append(itemResult)
             
-            // Track successfully imported items for known-items update
-            if itemResult.status == .imported,
+            // Track successfully imported items for known-items update (skip in dry-run)
+            if !dryRun,
+               itemResult.status == .imported,
                let destinationPath = itemResult.destinationPath {
                 successfullyImported.append(
                     (path: item.path, destinationPath: destinationPath)
@@ -130,8 +134,8 @@ public struct ImportExecutor {
             summary: summary
         )
         
-        // Update known-items tracking (only for successfully imported items)
-        if !successfullyImported.isEmpty {
+        // Update known-items tracking (only for successfully imported items, skip in dry-run)
+        if !dryRun && !successfullyImported.isEmpty {
             do {
                 try KnownItemsTracker.recordImportedItems(
                     successfullyImported,
@@ -144,17 +148,19 @@ public struct ImportExecutor {
             }
         }
         
-        // Store import result
-        let resultFileURL = ImportResultStorage.resultFileURL(
-            for: libraryRootURL,
-            sourceId: detectionResult.sourceId,
-            timestamp: importResult.importedAt
-        )
-        
-        do {
-            try ImportResultSerializer.write(importResult, to: resultFileURL)
-        } catch {
-            throw ImportExecutionError.resultStorageFailed(error)
+        // Store import result (skip in dry-run to avoid file I/O)
+        if !dryRun {
+            let resultFileURL = ImportResultStorage.resultFileURL(
+                for: libraryRootURL,
+                sourceId: detectionResult.sourceId,
+                timestamp: importResult.importedAt
+            )
+            
+            do {
+                try ImportResultSerializer.write(importResult, to: resultFileURL)
+            } catch {
+                throw ImportExecutionError.resultStorageFailed(error)
+            }
         }
         
         return importResult
@@ -166,12 +172,14 @@ public struct ImportExecutor {
     ///   - item: The candidate item to import
     ///   - libraryRootURL: Library root URL
     ///   - options: Import options
+    ///   - dryRun: If true, skip file operations but perform all other logic
     ///   - fileOperations: File operations implementation
     /// - Returns: ImportItemResult with status and details
     private static func processImportItem(
         item: CandidateMediaItem,
         libraryRootURL: URL,
         options: ImportOptions,
+        dryRun: Bool,
         fileOperations: FileOperationsProtocol
     ) -> ImportItemResult {
         // Step 1: Extract timestamp
@@ -218,7 +226,18 @@ public struct ImportExecutor {
         // Step 5: Process based on collision handling result
         switch collisionHandling {
         case .proceed(let finalDestinationURL):
-            // Copy file atomically
+            // In dry-run mode, skip file copy but return success result
+            if dryRun {
+                return ImportItemResult(
+                    sourcePath: item.path,
+                    destinationPath: destinationMapping.relativePath,
+                    status: .imported,
+                    timestampUsed: ISO8601DateFormatter().string(from: timestampResult.date),
+                    timestampSource: timestampResult.source == .exifDateTimeOriginal ? "exif" : "filesystem"
+                )
+            }
+            
+            // Copy file atomically (only in non-dry-run mode)
             do {
                 let sourceURL = URL(fileURLWithPath: item.path)
                 _ = try AtomicFileCopier.copyAtomically(

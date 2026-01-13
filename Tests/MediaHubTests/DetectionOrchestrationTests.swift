@@ -68,6 +68,11 @@ final class DetectionOrchestrationTests: XCTestCase {
         XCTAssertEqual(result.summary.knownItems, 0)
         XCTAssertEqual(result.candidates.count, 1)
         XCTAssertEqual(result.candidates[0].status, "new")
+        
+        // Verify read-only behavior: source file is unchanged
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sourceFile.path))
+        let sourceContent = try String(contentsOf: sourceFile, encoding: .utf8)
+        XCTAssertEqual(sourceContent, "fake image", "Detection should not modify source files")
     }
     
     func testExecuteDetectionWithKnownItems() throws {

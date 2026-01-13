@@ -17,6 +17,7 @@ enum CLIError: Error, CustomStringConvertible {
     case detectionResultNotFound
     case invalidArgument(String)
     case operationFailed(String)
+    case nonInteractiveModeRequiresYes
     
     var description: String {
         switch self {
@@ -34,6 +35,8 @@ enum CLIError: Error, CustomStringConvertible {
             return "Invalid argument: \(message)"
         case .operationFailed(let message):
             return "Operation failed: \(message)"
+        case .nonInteractiveModeRequiresYes:
+            return "Non-interactive mode requires --yes flag. Use --yes to skip confirmation in scripts."
         }
     }
 }
@@ -214,19 +217,19 @@ struct ErrorFormatter {
     private static func formatImportError(_ error: ImportExecutionError) -> String {
         switch error {
         case .invalidDetectionResult:
-            return "Invalid detection result"
+            return "Invalid detection result. Run detection again to generate a new result."
         case .invalidLibrary:
-            return "Invalid library"
+            return "Invalid library. Verify the library path and ensure it's a valid MediaHub library."
         case .invalidSource:
-            return "Invalid source"
+            return "Invalid source. Verify the source is properly attached to the library."
         case .noItemsSelected:
-            return "No items selected for import"
+            return "No items selected for import. Use --all to import all detected items."
         case .importFailed(let path, let error):
-            return "Import failed at \(path): \(error.localizedDescription)"
+            return "Import failed for \(path). Library integrity preserved. Error: \(error.localizedDescription). Check file permissions and disk space."
         case .knownItemsUpdateFailed(let error):
-            return "Failed to update known items: \(error.localizedDescription)"
+            return "Import completed but failed to update tracking. Library integrity preserved. Error: \(error.localizedDescription). You may need to run detection again."
         case .resultStorageFailed(let error):
-            return "Failed to store import result: \(error.localizedDescription)"
+            return "Import completed but failed to store result. Library integrity preserved. Error: \(error.localizedDescription). Imported files are safe."
         }
     }
 }

@@ -55,7 +55,7 @@ SRC="/tmp/mh_source"
 LIB_REAL="/tmp/mh_library_real_sources"
 
 # Real source paths (READ ONLY - never import into these)
-REAL_SOURCES=(
+REAL_SOURCE_PATHS=(
   "/Volumes/Photos/Photos/Librairie"
   "/Volumes/Photos/Photos/Librairie_Amateur"
   "/Volumes/Photos/Boulots"
@@ -545,12 +545,47 @@ assert_eq "$NEW1" "4" "Nouveaux éléments détectés"
 STEP_DURATION=$(step_end "$STEP_START")
 record_step "Detect (pre-import)" "PASS" "scanned=$TOTAL1 new=$NEW1 known=0" "$STEP_DURATION"
 
+# --- dry-run import test ---
+step "Import (dry-run)"
+STEP_START=$(step_start)
+
+test_header "Dry-run import (devrait prévisualiser 4 éléments sans importer)"
+DRYRUN_JSON=$(run import "$SID" --all --dry-run --json)
+# Dry-run output is wrapped in envelope: {"dryRun": true, "result": {...}}
+DRYRUN_FLAG=$(python3 -c "import json, sys; j=json.loads(sys.argv[1]); print(j.get('dryRun', False))" "$DRYRUN_JSON" 2>/dev/null || echo "false")
+if [[ "$DRYRUN_FLAG" == "True" || "$DRYRUN_FLAG" == "true" ]]; then
+  # Extract result from envelope
+  DRYRUN_RESULT=$(python3 -c "import json, sys; j=json.loads(sys.argv[1]); print(json.dumps(j.get('result', j)))" "$DRYRUN_JSON" 2>/dev/null || echo "$DRYRUN_JSON")
+  DRYRUN_IMPORTED=$(python3 -c "import json, sys; j=json.loads(sys.argv[1]); print(j.get('summary', {}).get('imported', 0))" "$DRYRUN_RESULT" 2>/dev/null || echo "0")
+else
+  # Fallback: try to parse as direct ImportResult
+  DRYRUN_IMPORTED=$(python3 -c "import json, sys; j=json.loads(sys.argv[1]); print(j.get('summary', {}).get('imported', 0))" "$DRYRUN_JSON" 2>/dev/null || echo "0")
+fi
+assert_eq "$DRYRUN_IMPORTED" "4" "Éléments prévisualisés en dry-run"
+
+# Verify no files were actually imported (dry-run should not copy files)
+test_header "Vérification qu'aucun fichier n'a été importé (dry-run)"
+if [[ ! -d "$LIB/2024" ]]; then
+  success "Aucun fichier importé (dry-run fonctionne correctement)"
+else
+  # Check if any files exist (they shouldn't in dry-run)
+  FILES_COUNT=$(find "$LIB/2024" -type f 2>/dev/null | wc -l | tr -d ' ')
+  if [[ "$FILES_COUNT" == "0" ]]; then
+    success "Aucun fichier importé (dry-run fonctionne correctement)"
+  else
+    fail "Des fichiers ont été importés lors du dry-run (devrait être 0, trouvé: $FILES_COUNT)"
+  fi
+fi
+
+STEP_DURATION=$(step_end "$STEP_START")
+record_step "Import (dry-run)" "PASS" "preview=$DRYRUN_IMPORTED files=0" "$STEP_DURATION"
+
 # --- import all ---
 step "Import"
 STEP_START=$(step_start)
 
 test_header "Import de tous les éléments (devrait importer 4)"
-IMPORT1_JSON=$(run import "$SID" --all --json)
+IMPORT1_JSON=$(run import "$SID" --all --yes --json)
 IMPORTED1=$(python3 -c "import json, sys; j=json.loads(sys.argv[1]); print(j['summary']['imported'])" "$IMPORT1_JSON")
 FAILED1=$(python3 -c "import json, sys; j=json.loads(sys.argv[1]); print(j['summary']['failed'])" "$IMPORT1_JSON")
 assert_eq "$IMPORTED1" "4" "Éléments importés"
@@ -588,7 +623,7 @@ step "Import (idempotence)"
 STEP_START=$(step_start)
 
 test_header "Réimport (devrait importer 0 élément - idempotence)"
-IMPORT2_JSON=$(run import "$SID" --all --json)
+IMPORT2_JSON=$(run import "$SID" --all --yes --json)
 # Handle case where no new items returns {"message": "..."} instead of full ImportResult
 IMPORTED2=$(python3 -c "import json, sys; j=json.loads(sys.argv[1]); print(j.get('summary', {}).get('imported', 0) if 'summary' in j else 0)" "$IMPORT2_JSON")
 assert_eq "$IMPORTED2" "0" "Éléments importés lors du réimport (devrait être 0)"
@@ -659,7 +694,7 @@ if [[ "$REAL_SOURCES" == "1" ]]; then
   
   # Test each real source
   set +e  # Temporarily disable exit on error for loop
-  for real_source in "${REAL_SOURCES[@]}"; do
+  for real_source in "${REAL_SOURCE_PATHS[@]}"; do
     if test_real_source "$real_source"; then
       ((REAL_SOURCES_TESTED++))
     else

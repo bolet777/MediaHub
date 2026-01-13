@@ -31,6 +31,9 @@ let package = Package(
             ]),
         .testTarget(
             name: "MediaHubTests",
-            dependencies: ["MediaHub"]),
+            dependencies: [
+                "MediaHub",
+                "MediaHubCLI"
+            ]),
     ]
 )

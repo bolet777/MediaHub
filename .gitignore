@@ -187,6 +187,10 @@ xcuserdata/
 *.swiftsourceinfo
 .swift-version
 
+# Editor / AI tooling
+.cursor/
+.specify/
+
 # Project specific
 .specify/
 *.specify

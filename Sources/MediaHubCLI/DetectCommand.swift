@@ -12,7 +12,12 @@ import MediaHub
 struct DetectCommand: ParsableCommand {
     static var configuration = CommandConfiguration(
         commandName: "detect",
-        abstract: "Run detection on a source to find new media items"
+        abstract: "Run detection on a source to find new media items",
+        discussion: """
+        Read-only operation: Detection does not modify source files or copy media files.
+        Detection may write result files in the library's .mediahub directory, but never
+        modifies source files or copies media files.
+        """
     )
     
     @Argument(help: "Source identifier")

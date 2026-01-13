@@ -142,6 +142,7 @@ struct DetectionResultFormatter: OutputFormatter {
     private func formatHumanReadable() -> String {
         var output = "Detection Results\n"
         output += "=================\n\n"
+        output += "Read-only: No source files or media files modified\n\n"
         output += "Source ID: \(result.sourceId)\n"
         output += "Detected at: \(result.detectedAt)\n\n"
         output += "Summary:\n"
@@ -180,6 +181,13 @@ struct DetectionResultFormatter: OutputFormatter {
 struct ImportResultFormatter: OutputFormatter {
     let result: ImportResult
     let outputFormat: OutputFormat
+    let dryRun: Bool
+    
+    init(result: ImportResult, outputFormat: OutputFormat, dryRun: Bool = false) {
+        self.result = result
+        self.outputFormat = outputFormat
+        self.dryRun = dryRun
+    }
     
     func format() -> String {
         switch outputFormat {
@@ -191,15 +199,56 @@ struct ImportResultFormatter: OutputFormatter {
     }
     
     private func formatHumanReadable() -> String {
-        var output = "Import Results\n"
-        output += "==============\n\n"
+        var output = dryRun ? "DRY-RUN: Import Preview\n" : "Import Results\n"
+        output += dryRun ? "=======================\n\n" : "==============\n\n"
         output += "Source ID: \(result.sourceId)\n"
-        output += "Imported at: \(result.importedAt)\n\n"
+        output += dryRun ? "Preview at: \(result.importedAt)\n\n" : "Imported at: \(result.importedAt)\n\n"
         output += "Summary:\n"
         output += "  Total: \(result.summary.total)\n"
-        output += "  Imported: \(result.summary.imported)\n"
+        if dryRun {
+            output += "  Would import: \(result.summary.imported)\n"
+        } else {
+            output += "  Imported: \(result.summary.imported)\n"
+        }
         output += "  Skipped: \(result.summary.skipped)\n"
         output += "  Failed: \(result.summary.failed)\n\n"
+        
+        // Show preview details for dry-run (source paths, destination paths, collisions)
+        if dryRun {
+            let importedItems = result.items.filter { $0.status == .imported }
+            let skippedItems = result.items.filter { $0.status == .skipped }
+            
+            if !importedItems.isEmpty {
+                output += "Would import:\n"
+                for (index, item) in importedItems.prefix(20).enumerated() {
+                    output += "  \(index + 1). \(item.sourcePath)\n"
+                    if let destinationPath = item.destinationPath {
+                        output += "     → \(destinationPath)\n"
+                    }
+                }
+                if importedItems.count > 20 {
+                    output += "  ... and \(importedItems.count - 20) more\n"
+                }
+                output += "\n"
+            }
+            
+            if !skippedItems.isEmpty {
+                output += "Would skip (collisions):\n"
+                for (index, item) in skippedItems.prefix(10).enumerated() {
+                    output += "  \(index + 1). \(item.sourcePath)\n"
+                    if let destinationPath = item.destinationPath {
+                        output += "     → \(destinationPath)\n"
+                    }
+                    if let reason = item.reason {
+                        output += "     Reason: \(reason)\n"
+                    }
+                }
+                if skippedItems.count > 10 {
+                    output += "  ... and \(skippedItems.count - 10) more\n"
+                }
+                output += "\n"
+            }
+        }
         
         if result.summary.failed > 0 {
             output += "Failed items:\n"
@@ -222,6 +271,22 @@ struct ImportResultFormatter: OutputFormatter {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         
+        // In dry-run mode, wrap result in envelope with dryRun field
+        if dryRun {
+            struct DryRunEnvelope: Codable {
+                let dryRun: Bool
+                let result: ImportResult
+            }
+            
+            let envelope = DryRunEnvelope(dryRun: true, result: result)
+            guard let data = try? encoder.encode(envelope),
+                  let jsonString = String(data: data, encoding: .utf8) else {
+                return "{}"
+            }
+            return jsonString
+        }
+        
+        // Normal mode: encode result directly
         guard let data = try? encoder.encode(result),
               let jsonString = String(data: data, encoding: .utf8) else {
             return "{}"
