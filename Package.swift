@@ -12,12 +12,23 @@ let package = Package(
         .library(
             name: "MediaHub",
             targets: ["MediaHub"]),
+        .executable(
+            name: "mediahub",
+            targets: ["MediaHubCLI"]),
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.2.0"),
+    ],
     targets: [
         .target(
             name: "MediaHub",
             dependencies: []),
+        .executableTarget(
+            name: "MediaHubCLI",
+            dependencies: [
+                "MediaHub",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ]),
         .testTarget(
             name: "MediaHubTests",
             dependencies: ["MediaHub"]),
