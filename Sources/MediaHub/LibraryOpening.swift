@@ -364,8 +364,10 @@ public struct LibraryOpener {
             // Convert validation error to opening error
             throw convertValidationError(error)
         case .warning(let message):
-            // Log warning but continue
-            print("Warning: \(message)")
+            // Log warning but continue (suppress during tests)
+            if NSClassFromString("XCTestCase") == nil {
+                print("Warning: \(message)")
+            }
         }
         
         // Step 3: Read metadata
