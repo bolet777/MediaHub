@@ -156,6 +156,37 @@ secrets/
 credentials/
 .secrets
 
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Xcode
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+*.xcworkspace/*
+!*.xcworkspace/contents.xcworkspacedata
+!*.xcworkspace/xcshareddata/
+*.xcuserstate
+*.xcuserdatad
+project.xcworkspace/
+xcuserdata/
+
+# Swift
+*.swiftdoc
+*.swiftmodule
+*.swiftsourceinfo
+.swift-version
+
 # Project specific
 .specify/
 *.specify
