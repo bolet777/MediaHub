@@ -90,6 +90,27 @@ public struct DetectionResult: Codable, Equatable {
     /// Summary statistics
     public let summary: DetectionSummary
     
+    /// Whether baseline index was used (true) or fallback to full scan (false)
+    public let indexUsed: Bool
+    
+    /// Fallback reason if index was not used (nil if index was used)
+    public let indexFallbackReason: String?
+    
+    /// Index metadata (if index was used)
+    public let indexMetadata: IndexMetadata?
+    
+    /// Index metadata structure
+    public struct IndexMetadata: Codable, Equatable {
+        /// Index version
+        public let version: String
+        
+        /// Number of entries in index
+        public let entryCount: Int
+        
+        /// ISO-8601 timestamp of last index update
+        public let lastUpdated: String
+    }
+    
     /// Creates a new DetectionResult
     ///
     /// - Parameters:
@@ -98,6 +119,9 @@ public struct DetectionResult: Codable, Equatable {
     ///   - detectedAt: ISO-8601 timestamp (defaults to now)
     ///   - candidates: Array of candidate results
     ///   - summary: Summary statistics
+    ///   - indexUsed: Whether baseline index was used
+    ///   - indexFallbackReason: Fallback reason if index was not used
+    ///   - indexMetadata: Index metadata if index was used
     ///   - version: Format version (defaults to "1.0")
     public init(
         sourceId: String,
@@ -105,6 +129,9 @@ public struct DetectionResult: Codable, Equatable {
         detectedAt: String? = nil,
         candidates: [CandidateItemResult],
         summary: DetectionSummary,
+        indexUsed: Bool = false,
+        indexFallbackReason: String? = nil,
+        indexMetadata: IndexMetadata? = nil,
         version: String = "1.0"
     ) {
         self.version = version
@@ -113,6 +140,9 @@ public struct DetectionResult: Codable, Equatable {
         self.detectedAt = detectedAt ?? ISO8601DateFormatter().string(from: Date())
         self.candidates = candidates
         self.summary = summary
+        self.indexUsed = indexUsed
+        self.indexFallbackReason = indexFallbackReason
+        self.indexMetadata = indexMetadata
     }
     
     /// Validates that the result structure is valid

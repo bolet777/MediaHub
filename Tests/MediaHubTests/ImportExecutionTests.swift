@@ -560,4 +560,179 @@ final class ImportExecutionTests: XCTestCase {
     // Full interactive prompt testing (yes/y, no/n, Ctrl+C) requires manual validation.
     // The confirmation logic branches (skip for dry-run, skip for --yes, require --yes
     // in non-interactive mode) are tested through the CLI integration when possible.
+    
+    // MARK: - Baseline Index Integration Tests (Slice 7)
+    
+    func testExecuteImportUpdatesIndexWhenValidAtStart() throws {
+        // Create library with existing index
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRootURL.path)
+        let existingEntries = [
+            IndexEntry(path: "2024/01/existing.jpg", size: 1000, mtime: ISO8601DateFormatter().string(from: Date()))
+        ]
+        let existingIndex = BaselineIndex(entries: existingEntries)
+        try BaselineIndexWriter.write(existingIndex, to: indexPath, libraryRoot: libraryRootURL.path)
+        
+        // Create source file
+        let sourceFile = sourceRootURL.appendingPathComponent("new.jpg")
+        try "new content".write(to: sourceFile, atomically: true, encoding: .utf8)
+        
+        // Create detection result
+        let candidate = CandidateMediaItem(
+            path: sourceFile.path,
+            size: 2048,
+            modificationDate: ISO8601DateFormatter().string(from: Date()),
+            fileName: "new.jpg"
+        )
+        
+        let detectionResult = DetectionResult(
+            sourceId: source.sourceId,
+            libraryId: libraryId,
+            candidates: [
+                CandidateItemResult(item: candidate, status: "new")
+            ],
+            summary: DetectionSummary(totalScanned: 1, newItems: 1, knownItems: 0)
+        )
+        
+        // Execute import
+        let options = ImportOptions(collisionPolicy: .rename)
+        let importResult = try ImportExecutor.executeImport(
+            detectionResult: detectionResult,
+            selectedItems: [candidate],
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId,
+            options: options
+        )
+        
+        // Verify import succeeded
+        XCTAssertEqual(importResult.summary.imported, 1)
+        
+        // Verify index was updated
+        XCTAssertTrue(importResult.indexUpdateAttempted, "Index update should be attempted when index is valid at start")
+        XCTAssertTrue(importResult.indexUpdated, "Index should be updated after successful import")
+        XCTAssertNil(importResult.indexUpdateSkippedReason, "No skip reason when index is updated")
+        XCTAssertNotNil(importResult.indexMetadata, "Index metadata should be present")
+        XCTAssertEqual(importResult.indexMetadata?.version, "1.0")
+        
+        // Verify index file contains new entry
+        let updatedIndex = try BaselineIndexReader.load(from: indexPath)
+        XCTAssertGreaterThan(updatedIndex.entryCount, existingIndex.entryCount, "Index entry count should increase")
+        
+        // Verify new entry is in index (check by path)
+        let importedItem = importResult.items.first { $0.status == .imported }
+        if let destinationPath = importedItem?.destinationPath {
+            let normalizedPath = try normalizePath(
+                libraryRootURL.appendingPathComponent(destinationPath).path,
+                relativeTo: libraryRootURL.path
+            )
+            let entryPaths = Set(updatedIndex.entries.map { $0.path })
+            XCTAssertTrue(entryPaths.contains(normalizedPath), "Index should contain imported file path")
+        }
+    }
+    
+    func testExecuteImportDoesNotCreateIndexWhenAbsentAtStart() throws {
+        // Create library without index (no index file)
+        // Create source file
+        let sourceFile = sourceRootURL.appendingPathComponent("new.jpg")
+        try "new content".write(to: sourceFile, atomically: true, encoding: .utf8)
+        
+        // Create detection result
+        let candidate = CandidateMediaItem(
+            path: sourceFile.path,
+            size: 2048,
+            modificationDate: ISO8601DateFormatter().string(from: Date()),
+            fileName: "new.jpg"
+        )
+        
+        let detectionResult = DetectionResult(
+            sourceId: source.sourceId,
+            libraryId: libraryId,
+            candidates: [
+                CandidateItemResult(item: candidate, status: "new")
+            ],
+            summary: DetectionSummary(totalScanned: 1, newItems: 1, knownItems: 0)
+        )
+        
+        // Execute import
+        let options = ImportOptions(collisionPolicy: .rename)
+        let importResult = try ImportExecutor.executeImport(
+            detectionResult: detectionResult,
+            selectedItems: [candidate],
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId,
+            options: options
+        )
+        
+        // Verify import succeeded
+        XCTAssertEqual(importResult.summary.imported, 1)
+        
+        // Verify index was NOT created/updated
+        XCTAssertFalse(importResult.indexUpdateAttempted, "Index update should not be attempted when index is absent")
+        XCTAssertFalse(importResult.indexUpdated, "Index should not be updated when absent at start")
+        XCTAssertEqual(importResult.indexUpdateSkippedReason, "index_missing", "Skip reason should indicate index was missing")
+        XCTAssertNil(importResult.indexMetadata, "No index metadata when index is absent")
+        
+        // Verify index file does not exist
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRootURL.path)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: indexPath), "Index file should not be created when absent at start")
+    }
+    
+    func testExecuteImportDoesNotUpdateIndexInDryRun() throws {
+        // Create library with existing index
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRootURL.path)
+        let existingEntries = [
+            IndexEntry(path: "2024/01/existing.jpg", size: 1000, mtime: ISO8601DateFormatter().string(from: Date()))
+        ]
+        let existingIndex = BaselineIndex(entries: existingEntries)
+        try BaselineIndexWriter.write(existingIndex, to: indexPath, libraryRoot: libraryRootURL.path)
+        
+        // Get original index lastUpdated for comparison
+        let originalIndex = try BaselineIndexReader.load(from: indexPath)
+        let originalLastUpdated = originalIndex.lastUpdated
+        
+        // Create source file
+        let sourceFile = sourceRootURL.appendingPathComponent("new.jpg")
+        try "new content".write(to: sourceFile, atomically: true, encoding: .utf8)
+        
+        // Create detection result
+        let candidate = CandidateMediaItem(
+            path: sourceFile.path,
+            size: 2048,
+            modificationDate: ISO8601DateFormatter().string(from: Date()),
+            fileName: "new.jpg"
+        )
+        
+        let detectionResult = DetectionResult(
+            sourceId: source.sourceId,
+            libraryId: libraryId,
+            candidates: [
+                CandidateItemResult(item: candidate, status: "new")
+            ],
+            summary: DetectionSummary(totalScanned: 1, newItems: 1, knownItems: 0)
+        )
+        
+        // Execute import in dry-run mode
+        let options = ImportOptions(collisionPolicy: .rename)
+        let importResult = try ImportExecutor.executeImport(
+            detectionResult: detectionResult,
+            selectedItems: [candidate],
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId,
+            options: options,
+            dryRun: true
+        )
+        
+        // Verify import preview succeeded
+        XCTAssertEqual(importResult.summary.imported, 1) // Dry-run still reports as imported
+        
+        // Verify index was NOT updated (dry-run = zero writes)
+        XCTAssertTrue(importResult.indexUpdateAttempted, "Index update should be attempted (index was valid)")
+        XCTAssertFalse(importResult.indexUpdated, "Index should not be updated in dry-run mode")
+        XCTAssertEqual(importResult.indexUpdateSkippedReason, "dry_run", "Skip reason should indicate dry-run")
+        XCTAssertNotNil(importResult.indexMetadata, "Index metadata should be present (from existing index)")
+        
+        // Verify index file was not modified
+        let preservedIndex = try BaselineIndexReader.load(from: indexPath)
+        XCTAssertEqual(preservedIndex.lastUpdated, originalLastUpdated, "Index lastUpdated should not change in dry-run")
+        XCTAssertEqual(preservedIndex.entryCount, existingIndex.entryCount, "Index entry count should not change in dry-run")
+    }
 }

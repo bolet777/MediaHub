@@ -84,10 +84,27 @@ public struct ImportExecutor {
             throw ImportExecutionError.invalidDetectionResult
         }
         
+        // Step 1: Check baseline index state at start (for incremental updates)
+        let indexStateAtStart = BaselineIndexLoader.tryLoadBaselineIndex(libraryRoot: libraryRootURL.path)
+        let shouldUpdateIndex = indexStateAtStart.isValid // Only update if index was valid at start
+        
+        // Load existing index if we'll need to update it
+        var existingIndex: BaselineIndex?
+        if shouldUpdateIndex {
+            do {
+                let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRootURL.path)
+                existingIndex = try BaselineIndexReader.load(from: indexPath)
+            } catch {
+                // If loading fails, treat as if index is invalid (won't update)
+                // Import will still succeed
+            }
+        }
+        
         // Process items sequentially (deterministic order)
         let sortedItems = selectedItems.sorted { $0.path < $1.path }
         var importItemResults: [ImportItemResult] = []
         var successfullyImported: [(path: String, destinationPath: String)] = []
+        var newIndexEntries: [IndexEntry] = [] // Collect entries for successfully imported files
         
         let importTimestamp = ISO8601DateFormatter().string(from: Date())
         
@@ -109,6 +126,35 @@ public struct ImportExecutor {
                 successfullyImported.append(
                     (path: item.path, destinationPath: destinationPath)
                 )
+                
+                // Collect index entry for successfully imported file (if we'll update index)
+                if shouldUpdateIndex {
+                    do {
+                        // Build absolute destination path
+                        let absoluteDestinationPath = libraryRootURL.appendingPathComponent(destinationPath).path
+                        
+                        // Get file attributes (size, mtime)
+                        let attributes = try fileOperations.attributesOfItem(atPath: absoluteDestinationPath)
+                        guard let size = attributes[.size] as? Int64,
+                              let modificationDate = attributes[.modificationDate] as? Date else {
+                            // Skip if attributes can't be read
+                            continue
+                        }
+                        
+                        // Normalize path relative to library root
+                        let normalizedPath = try normalizePath(absoluteDestinationPath, relativeTo: libraryRootURL.path)
+                        
+                        // Convert modification date to ISO8601 string
+                        let mtime = ISO8601DateFormatter().string(from: modificationDate)
+                        
+                        // Create index entry
+                        let entry = IndexEntry(path: normalizedPath, size: size, mtime: mtime)
+                        newIndexEntries.append(entry)
+                    } catch {
+                        // Skip if we can't create entry (non-fatal)
+                        continue
+                    }
+                }
             }
         }
         
@@ -124,14 +170,97 @@ public struct ImportExecutor {
             failed: failedCount
         )
         
-        // Create import result
+        // Step 2: Update baseline index incrementally (batched, only if index was valid at start)
+        let indexUpdateAttempted = shouldUpdateIndex
+        var indexUpdated = false
+        var indexUpdateSkippedReason: String?
+        var indexMetadata: ImportResult.IndexMetadata?
+        
+        if shouldUpdateIndex && !dryRun && !newIndexEntries.isEmpty {
+            // Update index with new entries
+            if let currentIndex = existingIndex {
+                // Merge new entries with existing index (idempotent: same path = update entry)
+                do {
+                    let updatedIndex = currentIndex.updating(with: newIndexEntries)
+                    
+                    // Write updated index atomically
+                    let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRootURL.path)
+                    try BaselineIndexWriter.write(
+                        updatedIndex,
+                        to: indexPath,
+                        libraryRoot: libraryRootURL.path
+                    )
+                    
+                    indexUpdated = true
+                    indexMetadata = ImportResult.IndexMetadata(
+                        version: updatedIndex.version,
+                        entryCount: updatedIndex.entryCount,
+                        lastUpdated: updatedIndex.lastUpdated
+                    )
+                } catch {
+                    // Index update failure is non-fatal - import still succeeds
+                    indexUpdateSkippedReason = "update_failed"
+                    if case .valid(let index) = indexStateAtStart {
+                        indexMetadata = ImportResult.IndexMetadata(
+                            version: index.version,
+                            entryCount: index.entryCount,
+                            lastUpdated: index.lastUpdated
+                        )
+                    }
+                }
+            } else {
+                // Index was valid but couldn't be loaded - skip update
+                indexUpdateSkippedReason = "index_load_failed"
+                if case .valid(let index) = indexStateAtStart {
+                    indexMetadata = ImportResult.IndexMetadata(
+                        version: index.version,
+                        entryCount: index.entryCount,
+                        lastUpdated: index.lastUpdated
+                    )
+                }
+            }
+        } else {
+            // Determine skip reason
+            if dryRun {
+                indexUpdateSkippedReason = "dry_run"
+                if case .valid(let index) = indexStateAtStart {
+                    indexMetadata = ImportResult.IndexMetadata(
+                        version: index.version,
+                        entryCount: index.entryCount,
+                        lastUpdated: index.lastUpdated
+                    )
+                }
+            } else if !shouldUpdateIndex {
+                // Index was absent or invalid at start
+                if case .absent = indexStateAtStart {
+                    indexUpdateSkippedReason = "index_missing"
+                } else if case .invalid = indexStateAtStart {
+                    indexUpdateSkippedReason = "index_invalid"
+                }
+            } else if newIndexEntries.isEmpty {
+                indexUpdateSkippedReason = "no_new_entries"
+                if case .valid(let index) = indexStateAtStart {
+                    indexMetadata = ImportResult.IndexMetadata(
+                        version: index.version,
+                        entryCount: index.entryCount,
+                        lastUpdated: index.lastUpdated
+                    )
+                }
+            }
+        }
+        
+        // Create import result with index update information
         let importResult = ImportResult(
             sourceId: detectionResult.sourceId,
             libraryId: libraryId,
             importedAt: importTimestamp,
             options: options,
             items: importItemResults,
-            summary: summary
+            summary: summary,
+            indexUpdateAttempted: indexUpdateAttempted,
+            indexUpdated: indexUpdated,
+            indexUpdateSkippedReason: indexUpdateSkippedReason,
+            indexMetadata: indexMetadata
         )
         
         // Update known-items tracking (only for successfully imported items, skip in dry-run)

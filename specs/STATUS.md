@@ -91,20 +91,15 @@
 
 ## Planned Slices
 
-### 🔲 Slice 7 — Baseline Index
-**Status**: Planned (future)
+### ✅ Slice 7 — Baseline Index
+**Status**: Complete and validated (2026-01-14)  
+**Spec**: `specs/007-baseline-index/`  
+**Validation**: `specs/007-baseline-index/validation.md`
 
-**Objective**: Performance optimization for very large libraries by creating a persistent baseline index of existing media files.
-
-**Proposed Features**:
-- Create `.mediahub/registry/index.json` with baseline file list
-- Index structure prepared for future hash storage (Slice 8)
-- Incremental index updates (on import, not full re-scan)
-- Faster detection runs for large libraries (10,000+ files)
-
-**Note**: This is a performance optimization, not a functional prerequisite. Current `LibraryContentQuery.scanLibraryContents()` is sufficient for typical library sizes. Slice 7 improves `detect` and `import` performance for very large libraries. Slice 7 does NOT perform content hashing (hashing is reserved for Slice 8).
-
-**Dependency**: Builds on Slice 6 (adoption baseline scan). Slice 7 adds persistent indexing to avoid full re-scans.
+**Deliverables**:
+- Baseline index persistant `.mediahub/registry/index.json` (v1.0)
+- `detect` read-only: utilise l'index si valide, fallback sinon (raison reportée)
+- `import` update incrémental atomique, dry-run = 0 write, update seulement si index valide au début
 
 ### 🔲 Slice 8 — Advanced Hashing & Deduplication
 **Status**: Planned (future)
@@ -157,7 +152,6 @@
 - Incremental imports: after adoption, `detect` and `import` commands work normally and only add new items
 
 **What's Next**:
-- Slice 7: Performance optimization with baseline index for very large libraries
 - Slice 8: Advanced hashing and cross-source deduplication
 
 ---
@@ -198,5 +192,5 @@
 
 ---
 
-**Last Updated**: 2026-01-27  
-**Next Review**: After Slice 7 or after real-world usage
+**Last Updated**: 2026-01-14  
+**Next Review**: After Slice 8 or after real-world usage

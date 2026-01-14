@@ -130,6 +130,30 @@ public struct ImportResult: Codable, Equatable {
     /// Summary statistics
     public let summary: ImportSummary
     
+    /// Whether index update was attempted (true if index was valid at start)
+    public let indexUpdateAttempted: Bool
+    
+    /// Whether index was actually updated (true if update succeeded)
+    public let indexUpdated: Bool
+    
+    /// Reason why index update was skipped (if not updated)
+    public let indexUpdateSkippedReason: String?
+    
+    /// Index metadata (if index was updated or was valid at start)
+    public let indexMetadata: IndexMetadata?
+    
+    /// Index metadata structure
+    public struct IndexMetadata: Codable, Equatable {
+        /// Index version
+        public let version: String
+        
+        /// Number of entries in index
+        public let entryCount: Int
+        
+        /// ISO-8601 timestamp of last index update
+        public let lastUpdated: String
+    }
+    
     /// Creates a new ImportResult
     ///
     /// - Parameters:
@@ -139,6 +163,10 @@ public struct ImportResult: Codable, Equatable {
     ///   - options: Import options
     ///   - items: Array of import item results
     ///   - summary: Summary statistics
+    ///   - indexUpdateAttempted: Whether index update was attempted
+    ///   - indexUpdated: Whether index was actually updated
+    ///   - indexUpdateSkippedReason: Reason why index update was skipped
+    ///   - indexMetadata: Index metadata if available
     ///   - version: Format version (defaults to "1.0")
     public init(
         sourceId: String,
@@ -147,6 +175,10 @@ public struct ImportResult: Codable, Equatable {
         options: ImportOptions,
         items: [ImportItemResult],
         summary: ImportSummary,
+        indexUpdateAttempted: Bool = false,
+        indexUpdated: Bool = false,
+        indexUpdateSkippedReason: String? = nil,
+        indexMetadata: IndexMetadata? = nil,
         version: String = "1.0"
     ) {
         self.version = version
@@ -156,6 +188,10 @@ public struct ImportResult: Codable, Equatable {
         self.options = options
         self.items = items
         self.summary = summary
+        self.indexUpdateAttempted = indexUpdateAttempted
+        self.indexUpdated = indexUpdated
+        self.indexUpdateSkippedReason = indexUpdateSkippedReason
+        self.indexMetadata = indexMetadata
     }
     
     /// Validates that the result structure is valid

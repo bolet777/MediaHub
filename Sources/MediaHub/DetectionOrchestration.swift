@@ -64,12 +64,31 @@ public struct DetectionOrchestrator {
         // Sort candidates by path for determinism
         let sortedCandidates = candidates.sorted { $0.path < $1.path }
         
-        // Step 3: Query Library contents
+        // Step 3: Query Library contents (try index first, fallback to full scan)
         let libraryPaths: Set<String>
-        do {
-            libraryPaths = try LibraryContentQuery.scanLibraryContents(at: libraryRootURL)
-        } catch let error as LibraryComparisonError {
-            throw DetectionOrchestrationError.comparisonFailed(error)
+        let indexState: IndexUsageState
+        let indexMetadata: DetectionResult.IndexMetadata?
+        
+        // Try to load baseline index (READ-ONLY: never creates or modifies index)
+        indexState = BaselineIndexLoader.tryLoadBaselineIndex(libraryRoot: libraryRootURL.path)
+        
+        switch indexState {
+        case .valid(let index):
+            // Extract normalized paths from index entries
+            libraryPaths = Set(index.entries.map { $0.path })
+            indexMetadata = DetectionResult.IndexMetadata(
+                version: index.version,
+                entryCount: index.entryCount,
+                lastUpdated: index.lastUpdated
+            )
+        case .absent, .invalid:
+            // Fallback to full scan
+            do {
+                libraryPaths = try LibraryContentQuery.scanLibraryContents(at: libraryRootURL)
+            } catch let error as LibraryComparisonError {
+                throw DetectionOrchestrationError.comparisonFailed(error)
+            }
+            indexMetadata = nil
         }
         
         // Step 3.5: Query known items for this Source (import-detection integration)
@@ -126,12 +145,15 @@ public struct DetectionOrchestrator {
             knownItems: knownCount
         )
         
-        // Create detection result
+        // Create detection result with index usage information
         let result = DetectionResult(
             sourceId: source.sourceId,
             libraryId: libraryId,
             candidates: candidateResults,
-            summary: summary
+            summary: summary,
+            indexUsed: indexState.isValid,
+            indexFallbackReason: indexState.fallbackReason,
+            indexMetadata: indexMetadata
         )
         
         // Step 6: Store detection result

@@ -68,9 +68,36 @@ public struct LibraryAdoptionResult {
     /// Baseline scan summary
     public let baselineScan: BaselineScanSummary
     
-    public init(metadata: LibraryMetadata, baselineScan: BaselineScanSummary) {
+    /// Whether baseline index was created during adoption
+    public let indexCreated: Bool
+    
+    /// Reason why index was skipped (if not created)
+    public let indexSkippedReason: String?
+    
+    /// Index metadata (if index was created or already existed)
+    public let indexMetadata: IndexMetadata?
+    
+    /// Index metadata structure
+    public struct IndexMetadata: Codable, Equatable {
+        /// Index version
+        public let version: String
+        
+        /// Number of entries in index
+        public let entryCount: Int
+    }
+    
+    public init(
+        metadata: LibraryMetadata,
+        baselineScan: BaselineScanSummary,
+        indexCreated: Bool = false,
+        indexSkippedReason: String? = nil,
+        indexMetadata: IndexMetadata? = nil
+    ) {
         self.metadata = metadata
         self.baselineScan = baselineScan
+        self.indexCreated = indexCreated
+        self.indexSkippedReason = indexSkippedReason
+        self.indexMetadata = indexMetadata
     }
 }
 
@@ -177,13 +204,60 @@ public struct LibraryAdopter {
         // Create baseline scan summary (deterministic: sorted paths)
         let baselineScan = BaselineScanSummary(fileCount: baselinePaths.count, filePaths: baselinePaths)
         
-        // Step 4: In dry-run mode, return preview without creating files
-        if dryRun {
-            // Dry-run: return preview results without any file system writes
-            return LibraryAdoptionResult(metadata: metadata, baselineScan: baselineScan)
+        // Step 4: Create baseline index from baseline scan (in memory, for preview or creation)
+        let baselineIndex = try createBaselineIndex(
+            from: baselinePaths,
+            libraryRoot: libraryRootURL.path
+        )
+        
+        // Step 5: Check if index already exists and is valid
+        let indexState = BaselineIndexLoader.tryLoadBaselineIndex(libraryRoot: libraryRootURL.path)
+        let indexCreated: Bool
+        let indexSkippedReason: String?
+        let indexMetadata: LibraryAdoptionResult.IndexMetadata?
+        
+        switch indexState {
+        case .valid(let existingIndex):
+            // Index already exists and is valid - preserve it (idempotent)
+            indexCreated = false
+            indexSkippedReason = "already_valid"
+            indexMetadata = LibraryAdoptionResult.IndexMetadata(
+                version: existingIndex.version,
+                entryCount: existingIndex.entryCount
+            )
+        case .absent, .invalid:
+            // Index is absent or invalid - will create it (unless dry-run)
+            if dryRun {
+                indexCreated = false
+                indexSkippedReason = "dry_run"
+                indexMetadata = LibraryAdoptionResult.IndexMetadata(
+                    version: baselineIndex.version,
+                    entryCount: baselineIndex.entryCount
+                )
+            } else {
+                // Will create index after structure is created
+                indexCreated = true
+                indexSkippedReason = nil
+                indexMetadata = LibraryAdoptionResult.IndexMetadata(
+                    version: baselineIndex.version,
+                    entryCount: baselineIndex.entryCount
+                )
+            }
         }
         
-        // Step 5: Actual adoption: create structure and write metadata
+        // Step 6: In dry-run mode, return preview without creating files
+        if dryRun {
+            // Dry-run: return preview results without any file system writes
+            return LibraryAdoptionResult(
+                metadata: metadata,
+                baselineScan: baselineScan,
+                indexCreated: false,
+                indexSkippedReason: "dry_run",
+                indexMetadata: indexMetadata
+            )
+        }
+        
+        // Step 7: Actual adoption: create structure and write metadata
         var state = AdoptionState(libraryRootURL: libraryRootURL)
         
         do {
@@ -196,8 +270,29 @@ public struct LibraryAdopter {
             try writeMetadataAtomically(metadata, to: metadataFileURL)
             state.metadataWritten = true
             
+            // Step 8: Create baseline index if needed (idempotent: only if absent/invalid)
+            if indexCreated {
+                do {
+                    let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRootURL.path)
+                    try BaselineIndexWriter.write(
+                        baselineIndex,
+                        to: indexPath,
+                        libraryRoot: libraryRootURL.path
+                    )
+                } catch {
+                    // Index creation failure is non-fatal - adoption still succeeds
+                    // Error is silently handled (index is optional optimization)
+                }
+            }
+            
             // Success!
-            return LibraryAdoptionResult(metadata: metadata, baselineScan: baselineScan)
+            return LibraryAdoptionResult(
+                metadata: metadata,
+                baselineScan: baselineScan,
+                indexCreated: indexCreated,
+                indexSkippedReason: indexSkippedReason,
+                indexMetadata: indexMetadata
+            )
             
         } catch let error as LibraryAdoptionError {
             // Rollback on error
@@ -208,6 +303,56 @@ public struct LibraryAdopter {
             try? rollback(state)
             throw LibraryAdoptionError.metadataWriteFailed(error)
         }
+    }
+    
+    /// Creates a baseline index from baseline scan paths
+    ///
+    /// - Parameters:
+    ///   - baselinePaths: Set of absolute paths from baseline scan
+    ///   - libraryRoot: Absolute path to library root
+    /// - Returns: Baseline index with entries for all paths
+    /// - Throws: Error if index creation fails
+    private static func createBaselineIndex(
+        from baselinePaths: Set<String>,
+        libraryRoot: String
+    ) throws -> BaselineIndex {
+        let fileManager = FileManager.default
+        var entries: [IndexEntry] = []
+        
+        // Collect file metadata for each path
+        for absolutePath in baselinePaths {
+            // Normalize path relative to library root
+            let normalizedPath: String
+            do {
+                normalizedPath = try normalizePath(absolutePath, relativeTo: libraryRoot)
+            } catch {
+                // Skip paths that can't be normalized (shouldn't happen, but handle gracefully)
+                continue
+            }
+            
+            // Get file attributes (size, mtime)
+            do {
+                let attributes = try fileManager.attributesOfItem(atPath: absolutePath)
+                guard let size = attributes[.size] as? Int64,
+                      let modificationDate = attributes[.modificationDate] as? Date else {
+                    // Skip files without required attributes
+                    continue
+                }
+                
+                // Convert modification date to ISO8601 string
+                let mtime = ISO8601DateFormatter().string(from: modificationDate)
+                
+                // Create index entry
+                let entry = IndexEntry(path: normalizedPath, size: size, mtime: mtime)
+                entries.append(entry)
+            } catch {
+                // Skip files that can't be read (permissions, etc.)
+                continue
+            }
+        }
+        
+        // Create baseline index (entries will be sorted by path in BaselineIndex.init)
+        return BaselineIndex(entries: entries)
     }
     
     /// Writes metadata to file using atomic write (temp file + atomic move).

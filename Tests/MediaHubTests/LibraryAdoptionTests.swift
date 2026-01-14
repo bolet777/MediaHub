@@ -1201,4 +1201,104 @@ final class LibraryAdoptionTests: XCTestCase {
             "Dry-run baseline scan paths should match actual exactly"
         )
     }
+    
+    // MARK: - Baseline Index Integration Tests (Slice 7)
+    
+    func testAdoptLibraryCreatesIndexWhenAbsent() throws {
+        // Given: A directory with media files (no index exists)
+        let libraryPath = tempDirectory.appendingPathComponent("TestLibrary").path
+        try FileManager.default.createDirectory(
+            at: URL(fileURLWithPath: libraryPath),
+            withIntermediateDirectories: true
+        )
+        
+        // Add media files
+        let photo1URL = URL(fileURLWithPath: libraryPath).appendingPathComponent("2024").appendingPathComponent("01").appendingPathComponent("photo1.jpg")
+        let photo2URL = URL(fileURLWithPath: libraryPath).appendingPathComponent("2024").appendingPathComponent("02").appendingPathComponent("photo2.jpg")
+        try FileManager.default.createDirectory(at: photo1URL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: photo2URL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "photo1".write(to: photo1URL, atomically: true, encoding: .utf8)
+        try "photo2".write(to: photo2URL, atomically: true, encoding: .utf8)
+        
+        // When: Adopting the library
+        let result = try LibraryAdopter.adoptLibrary(at: libraryPath)
+        
+        // Then: Index should be created
+        XCTAssertTrue(result.indexCreated, "Index should be created when absent")
+        XCTAssertNil(result.indexSkippedReason, "No skip reason when index is created")
+        XCTAssertNotNil(result.indexMetadata, "Index metadata should be present")
+        XCTAssertEqual(result.indexMetadata?.version, "1.0")
+        XCTAssertEqual(result.indexMetadata?.entryCount, 2)
+        
+        // Verify index file exists and is decodable
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryPath)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: indexPath), "Index file should exist")
+        
+        let loadedIndex = try BaselineIndexReader.load(from: indexPath)
+        XCTAssertEqual(loadedIndex.version, "1.0")
+        XCTAssertEqual(loadedIndex.entryCount, 2)
+        XCTAssertEqual(loadedIndex.entries.count, 2)
+    }
+    
+    func testAdoptLibraryPreservesValidExistingIndex() throws {
+        // Given: A directory with media files
+        let libraryPath = tempDirectory.appendingPathComponent("TestLibrary").path
+        try FileManager.default.createDirectory(
+            at: URL(fileURLWithPath: libraryPath),
+            withIntermediateDirectories: true
+        )
+        
+        // Add media files
+        let photo1URL = URL(fileURLWithPath: libraryPath).appendingPathComponent("2024").appendingPathComponent("01").appendingPathComponent("photo1.jpg")
+        let photo2URL = URL(fileURLWithPath: libraryPath).appendingPathComponent("2024").appendingPathComponent("02").appendingPathComponent("photo2.jpg")
+        try FileManager.default.createDirectory(at: photo1URL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: photo2URL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "photo1".write(to: photo1URL, atomically: true, encoding: .utf8)
+        try "photo2".write(to: photo2URL, atomically: true, encoding: .utf8)
+        
+        // Create a valid index manually (simulating previous adoption)
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryPath)
+        let existingEntries = [
+            IndexEntry(
+                path: try normalizePath(photo1URL.path, relativeTo: libraryPath),
+                size: 1000,
+                mtime: ISO8601DateFormatter().string(from: Date())
+            ),
+            IndexEntry(
+                path: try normalizePath(photo2URL.path, relativeTo: libraryPath),
+                size: 2000,
+                mtime: ISO8601DateFormatter().string(from: Date())
+            )
+        ]
+        let existingIndex = BaselineIndex(entries: existingEntries)
+        try BaselineIndexWriter.write(existingIndex, to: indexPath, libraryRoot: libraryPath)
+        
+        // Get original index content hash for comparison
+        let originalIndexData = try Data(contentsOf: URL(fileURLWithPath: indexPath))
+        let originalIndex = try BaselineIndexReader.load(from: indexPath)
+        let originalLastUpdated = originalIndex.lastUpdated
+        
+        // When: Adopting the library again (idempotent)
+        let result = try LibraryAdopter.adoptLibrary(at: libraryPath)
+        
+        // Then: Index should NOT be modified (preserved)
+        XCTAssertFalse(result.indexCreated, "Index should not be created when already valid")
+        XCTAssertEqual(result.indexSkippedReason, "already_valid", "Skip reason should indicate index was already valid")
+        XCTAssertNotNil(result.indexMetadata, "Index metadata should be present")
+        XCTAssertEqual(result.indexMetadata?.version, "1.0")
+        XCTAssertEqual(result.indexMetadata?.entryCount, 2)
+        
+        // Verify index file was not modified (compare lastUpdated timestamp)
+        let preservedIndex = try BaselineIndexReader.load(from: indexPath)
+        XCTAssertEqual(preservedIndex.lastUpdated, originalLastUpdated, "Index lastUpdated should not change when preserved")
+        XCTAssertEqual(preservedIndex.entryCount, 2, "Index entry count should remain unchanged")
+        
+        // Verify index content is identical (same entries)
+        XCTAssertEqual(preservedIndex.entries.count, originalIndex.entries.count)
+        for (preservedEntry, originalEntry) in zip(preservedIndex.entries, originalIndex.entries) {
+            XCTAssertEqual(preservedEntry.path, originalEntry.path)
+            XCTAssertEqual(preservedEntry.size, originalEntry.size)
+            XCTAssertEqual(preservedEntry.mtime, originalEntry.mtime)
+        }
+    }
 }

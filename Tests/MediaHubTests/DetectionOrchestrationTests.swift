@@ -248,4 +248,182 @@ final class DetectionOrchestrationTests: XCTestCase {
         XCTAssertNotNil(updatedSource?.lastDetectedAt)
         XCTAssertEqual(updatedSource?.lastDetectedAt, result.detectedAt)
     }
+    
+    // MARK: - Baseline Index Integration Tests
+    
+    func testExecuteDetectionUsesValidIndex() throws {
+        // Create library files
+        let mediaSubdir = libraryRootURL.appendingPathComponent("2024").appendingPathComponent("01")
+        try FileManager.default.createDirectory(at: mediaSubdir, withIntermediateDirectories: true)
+        
+        let libraryFile1 = mediaSubdir.appendingPathComponent("file1.jpg")
+        let libraryFile2 = mediaSubdir.appendingPathComponent("file2.jpg")
+        try "fake image 1".write(to: libraryFile1, atomically: true, encoding: .utf8)
+        try "fake image 2".write(to: libraryFile2, atomically: true, encoding: .utf8)
+        
+        // Create baseline index with library files
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRootURL.path)
+        let entries = [
+            IndexEntry(
+                path: try normalizePath(libraryFile1.path, relativeTo: libraryRootURL.path),
+                size: 1000,
+                mtime: ISO8601DateFormatter().string(from: Date())
+            ),
+            IndexEntry(
+                path: try normalizePath(libraryFile2.path, relativeTo: libraryRootURL.path),
+                size: 2000,
+                mtime: ISO8601DateFormatter().string(from: Date())
+            )
+        ]
+        let index = BaselineIndex(entries: entries)
+        try BaselineIndexWriter.write(index, to: indexPath, libraryRoot: libraryRootURL.path)
+        
+        // Create source with new file
+        let sourceFile = sourceDirectory.appendingPathComponent("new.jpg")
+        try "new image".write(to: sourceFile, atomically: true, encoding: .utf8)
+        
+        let source = Source(
+            sourceId: SourceIdentifierGenerator.generate(),
+            type: .folder,
+            path: sourceDirectory.path
+        )
+        
+        // Attach source to library
+        try SourceAssociationManager.attach(
+            source: source,
+            to: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Execute detection
+        let result = try DetectionOrchestrator.executeDetection(
+            source: source,
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Verify index was used
+        XCTAssertTrue(result.indexUsed, "Index should be used when valid")
+        XCTAssertNil(result.indexFallbackReason, "No fallback reason when index is used")
+        XCTAssertNotNil(result.indexMetadata, "Index metadata should be present")
+        XCTAssertEqual(result.indexMetadata?.version, "1.0")
+        XCTAssertEqual(result.indexMetadata?.entryCount, 2)
+        
+        // Verify detection results (new file should be detected as new)
+        XCTAssertEqual(result.summary.totalScanned, 1)
+        XCTAssertEqual(result.summary.newItems, 1)
+        XCTAssertEqual(result.summary.knownItems, 0)
+        
+        // Verify index file was not modified (read-only guarantee)
+        let indexAfter = try BaselineIndexReader.load(from: indexPath)
+        XCTAssertEqual(indexAfter.entryCount, 2, "Index should not be modified by detection")
+    }
+    
+    func testExecuteDetectionFallsBackWhenIndexAbsent() throws {
+        // Create library files (no index created)
+        let mediaSubdir = libraryRootURL.appendingPathComponent("2024").appendingPathComponent("01")
+        try FileManager.default.createDirectory(at: mediaSubdir, withIntermediateDirectories: true)
+        
+        let libraryFile = mediaSubdir.appendingPathComponent("file1.jpg")
+        try "fake image".write(to: libraryFile, atomically: true, encoding: .utf8)
+        
+        // Create source with new file
+        let sourceFile = sourceDirectory.appendingPathComponent("new.jpg")
+        try "new image".write(to: sourceFile, atomically: true, encoding: .utf8)
+        
+        let source = Source(
+            sourceId: SourceIdentifierGenerator.generate(),
+            type: .folder,
+            path: sourceDirectory.path
+        )
+        
+        // Attach source to library
+        try SourceAssociationManager.attach(
+            source: source,
+            to: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Execute detection
+        let result = try DetectionOrchestrator.executeDetection(
+            source: source,
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Verify fallback occurred
+        XCTAssertFalse(result.indexUsed, "Index should not be used when absent")
+        XCTAssertEqual(result.indexFallbackReason, "missing", "Fallback reason should be 'missing'")
+        XCTAssertNil(result.indexMetadata, "No index metadata when index is absent")
+        
+        // Verify detection still works (fallback to full scan)
+        XCTAssertEqual(result.summary.totalScanned, 1)
+        XCTAssertEqual(result.summary.newItems, 1)
+        XCTAssertEqual(result.summary.knownItems, 0)
+    }
+    
+    func testExecuteDetectionFallsBackWhenIndexInvalid() throws {
+        // Create invalid index file (wrong version)
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRootURL.path)
+        let invalidIndex = """
+        {
+            "version": "2.0",
+            "created": "2024-01-01T00:00:00Z",
+            "lastUpdated": "2024-01-01T00:00:00Z",
+            "entryCount": 0,
+            "entries": []
+        }
+        """
+        try FileManager.default.createDirectory(
+            at: URL(fileURLWithPath: indexPath).deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try invalidIndex.write(toFile: indexPath, atomically: true, encoding: .utf8)
+        
+        // Create library files
+        let mediaSubdir = libraryRootURL.appendingPathComponent("2024").appendingPathComponent("01")
+        try FileManager.default.createDirectory(at: mediaSubdir, withIntermediateDirectories: true)
+        
+        let libraryFile = mediaSubdir.appendingPathComponent("file1.jpg")
+        try "fake image".write(to: libraryFile, atomically: true, encoding: .utf8)
+        
+        // Create source with new file
+        let sourceFile = sourceDirectory.appendingPathComponent("new.jpg")
+        try "new image".write(to: sourceFile, atomically: true, encoding: .utf8)
+        
+        let source = Source(
+            sourceId: SourceIdentifierGenerator.generate(),
+            type: .folder,
+            path: sourceDirectory.path
+        )
+        
+        // Attach source to library
+        try SourceAssociationManager.attach(
+            source: source,
+            to: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Execute detection
+        let result = try DetectionOrchestrator.executeDetection(
+            source: source,
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Verify fallback occurred
+        XCTAssertFalse(result.indexUsed, "Index should not be used when invalid")
+        XCTAssertNotNil(result.indexFallbackReason, "Fallback reason should be present")
+        XCTAssertTrue(result.indexFallbackReason?.contains("unsupported_version") == true, "Fallback reason should indicate unsupported version")
+        XCTAssertNil(result.indexMetadata, "No index metadata when index is invalid")
+        
+        // Verify detection still works (fallback to full scan)
+        XCTAssertEqual(result.summary.totalScanned, 1)
+        XCTAssertEqual(result.summary.newItems, 1)
+        XCTAssertEqual(result.summary.knownItems, 0)
+        
+        // Verify index file was not modified (read-only guarantee)
+        let indexContent = try String(contentsOfFile: indexPath, encoding: .utf8)
+        XCTAssertTrue(indexContent.contains("2.0"), "Index should not be modified by detection")
+    }
 }
