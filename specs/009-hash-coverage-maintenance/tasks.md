@@ -59,7 +59,7 @@ Tasks are organized by implementation sequence and follow the milestones defined
 - Create `IndexHashCommand` struct as subcommand
 - Add `@Flag` properties for `--dry-run`, `--yes`
 - Add `@Option` property for `--limit` (optional Int)
-- Ensure `IndexHashCommand` respects the pre-existing global JSON output mode (do not define a new flag here)
+- Add `@Flag` property for `--json` (or `-j`) following the same pattern as other MediaHubCLI commands (e.g., `detect --json`, `import --json`)
 - Implement basic `run()` method with placeholder (library validation, error handling)
 
 **Done when**:
@@ -469,7 +469,7 @@ Tasks are organized by implementation sequence and follow the milestones defined
 
 ---
 
-## Task 6: Output Formatting (Human + Existing Global JSON Mode)
+## Task 6: Output Formatting (Human + JSON Mode)
 
 **Plan Reference**: Milestone 5 (lines 265-285)  
 **Spec Reference**: Expected Outputs (lines 116-277)  
@@ -507,7 +507,7 @@ Tasks are organized by implementation sequence and follow the milestones defined
 
 ### Task 6.2: Implement JSON Output Formatting
 
-**Objective**: Format output for JSON mode using pre-existing global `--json` flag pattern.
+**Objective**: Format output for JSON mode using the `--json` flag (defined locally for index hash command, consistent with MediaHubCLI architecture).
 
 **Files**:
 - `Sources/MediaHubCLI/IndexCommand.swift` (modify)

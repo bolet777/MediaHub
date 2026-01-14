@@ -11,6 +11,7 @@ struct MediaHubCommand: ParsableCommand {
             SourceCommand.self,
             DetectCommand.self,
             ImportCommand.self,
+            IndexCommand.self,
             StatusCommand.self,
         ],
         defaultSubcommand: nil

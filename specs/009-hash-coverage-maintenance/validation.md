@@ -148,15 +148,15 @@ PY
   - `--dry-run`: "Enumerate candidates and statistics only; do not compute hashes. Performs zero writes."
   - `--limit N`: "Process at most N files (useful for incremental operation or testing)"
   - `--yes`: "Bypass confirmation prompt for non-interactive execution"
-  - No `--library` flag defined as an index-hash-local flag (uses existing global library resolution)
-  - Respects pre-existing global `--json` flag (if present in CLI architecture)
-  - Slice-specific flags are present (--dry-run, --limit, --yes). Any global options (e.g., --library, --json) may appear if inherited, but must not be defined as index-hash-local flags.
+  - `--json` (or `-j`): "Output results in JSON format" (defined locally for index hash, following the same pattern as other MediaHubCLI commands)
+  - No `--library` flag defined as an index-hash-local flag (uses existing global library resolution via environment variable)
+  - Slice-specific flags are present (--dry-run, --limit, --yes, --json). The --json flag is defined locally per command, consistent with MediaHubCLI architecture (e.g., `detect --json`, `import --json`, `status --json`).
 
 **Acceptance Criteria**:
 - ✅ Help text matches spec exactly
-- ✅ Slice-specific flags are present (--dry-run, --limit, --yes); no index-hash-local --library flag is defined.
+- ✅ Slice-specific flags are present (--dry-run, --limit, --yes, --json); no index-hash-local --library flag is defined.
 - ✅ No --library flag defined as index-hash-local
-- ✅ Global --json mode is respected (if present)
+- ✅ --json flag is defined locally for index hash command (consistent with CLI architecture)
 
 ---
 
@@ -170,7 +170,7 @@ PY
 
 1. **Test invalid library path**:
    ```bash
-   swift run mediahub --library /nonexistent/path index hash
+   MEDIAHUB_LIBRARY=/nonexistent/path swift run mediahub index hash
    ```
    - Expected: Error message, exit code 1
 
@@ -183,7 +183,7 @@ PY
    echo '{"libraryId":"test","libraryVersion":"1.0"}' > .mediahub/library.json
 
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_no_index index hash
+   MEDIAHUB_LIBRARY=/tmp/test_lib_no_index swift run mediahub index hash
    ```
    - Expected: Error message about missing index, exit code 1
 
@@ -193,25 +193,25 @@ PY
    echo "invalid json" > .mediahub/registry/index.json
 
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_v10 index hash
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash
    ```
    - Expected: Error message about invalid index, exit code 1
 
 4. **Test non-interactive without --yes**:
    ```bash
-   echo "" | swift run mediahub --library /tmp/test_lib_v10 index hash
+   echo "" | MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash
    ```
    - Expected: Error message instructing use of --yes, exit code 1
 
 5. **Test dry-run success**:
    ```bash
-   swift run mediahub --library /tmp/test_lib_v10 index hash --dry-run
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --dry-run
    ```
    - Expected: Preview output, exit code 0
 
 6. **Test idempotent no-op success**:
    ```bash
-   swift run mediahub --library /tmp/test_lib_complete index hash --yes
+   MEDIAHUB_LIBRARY=/tmp/test_lib_complete swift run mediahub index hash --yes
    ```
    - Expected: "All files already have hash values", exit code 0
 
@@ -240,7 +240,7 @@ PY
    INDEX_TIME_BEFORE=$(stat -f %m .mediahub/registry/index.json 2>/dev/null || echo "0")
 
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_v10 index hash --dry-run
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --dry-run
 
    # Verify index file not modified
    INDEX_TIME_AFTER=$(stat -f %m /tmp/test_lib_v10/.mediahub/registry/index.json 2>/dev/null || echo "0")
@@ -249,13 +249,13 @@ PY
 
 2. **Verify dry-run output indicates zero hash computation**:
    ```bash
-   swift run mediahub --library /tmp/test_lib_v10 index hash --dry-run | grep -i "No hashes will be computed"
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --dry-run | grep -i "No hashes will be computed"
    ```
    - Expected: Output contains "No hashes will be computed. No changes will be made to the index."
 
 3. **Verify dry-run enumerates candidates only**:
    ```bash
-   swift run mediahub --library /tmp/test_lib_v10 index hash --dry-run
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --dry-run
    ```
    - Expected: Output shows "Files to process: N" but no hash computation progress
 
@@ -281,19 +281,19 @@ PY
 
 1. **Test non-interactive mode without --yes**:
    ```bash
-   echo "" | swift run mediahub --library /tmp/test_lib_v10 index hash 2>&1
+   echo "" | MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash 2>&1
    ```
    - Expected: Error message "Non-interactive mode requires --yes flag", exit code 1
 
 2. **Test non-interactive mode with --yes**:
    ```bash
-   echo "" | swift run mediahub --library /tmp/test_lib_v10 index hash --yes
+   echo "" | MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --yes
    ```
    - Expected: Proceeds without prompt, exit code 0
 
 3. **Test dry-run bypasses non-interactive check**:
    ```bash
-   echo "" | swift run mediahub --library /tmp/test_lib_v10 index hash --dry-run
+   echo "" | MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --dry-run
    ```
    - Expected: Proceeds without --yes, exit code 0
 
@@ -319,7 +319,7 @@ PY
    cp .mediahub/registry/index.json .mediahub/registry/index.json.backup
 
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_v11_partial index hash --yes
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v11_partial swift run mediahub index hash --yes
 
    # Verify index is valid JSON and contains updated hashes
    cat /tmp/test_lib_v11_partial/.mediahub/registry/index.json | python3 -m json.tool > /dev/null
@@ -355,8 +355,8 @@ PY
    cd /tmp/test_lib_v10
    # Run command twice, capture output
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_v10 index hash --dry-run > /tmp/output1.txt
-   swift run mediahub --library /tmp/test_lib_v10 index hash --dry-run > /tmp/output2.txt
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --dry-run > /tmp/output1.txt
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --dry-run > /tmp/output2.txt
 
    # Compare outputs
    diff /tmp/output1.txt /tmp/output2.txt
@@ -365,7 +365,7 @@ PY
 
 2. **Verify ordering is by normalized path**:
    ```bash
-   swift run mediahub --library /tmp/test_lib_v10 --json index hash --dry-run | python3 -c "import sys, json; data=json.load(sys.stdin); print('\n'.join(sorted([e.get('path', '') for e in data.get('candidates', [])])))"
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --json --dry-run | python3 -c "import sys, json; data=json.load(sys.stdin); print('\n'.join(sorted([e.get('path', '') for e in data.get('candidates', [])])))"
    ```
    - Expected: Candidates listed in sorted path order
 
@@ -386,16 +386,16 @@ PY
 1. **Test human-readable output determinism**:
    ```bash
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_v10 index hash --dry-run > /tmp/output1.txt
-   swift run mediahub --library /tmp/test_lib_v10 index hash --dry-run > /tmp/output2.txt
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --dry-run > /tmp/output1.txt
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --dry-run > /tmp/output2.txt
    diff /tmp/output1.txt /tmp/output2.txt
    ```
    - Expected: Outputs are identical
 
 2. **Test JSON output determinism**:
    ```bash
-   swift run mediahub --library /tmp/test_lib_v10 --json index hash --dry-run > /tmp/json1.json
-   swift run mediahub --library /tmp/test_lib_v10 --json index hash --dry-run > /tmp/json2.json
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --json --dry-run > /tmp/json1.json
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --json --dry-run > /tmp/json2.json
    diff <(python3 -m json.tool /tmp/json1.json) <(python3 -m json.tool /tmp/json2.json)
    ```
    - Expected: JSON outputs are identical (after normalization)
@@ -406,14 +406,14 @@ PY
    cp .mediahub/registry/index.json .mediahub/registry/index.json.backup
 
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_v11_partial index hash --yes > /tmp/output1.txt
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v11_partial swift run mediahub index hash --yes > /tmp/output1.txt
 
    # Restore and re-run
    cd /tmp/test_lib_v11_partial
    cp .mediahub/registry/index.json.backup .mediahub/registry/index.json
 
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_v11_partial index hash --yes > /tmp/output2.txt
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v11_partial swift run mediahub index hash --yes > /tmp/output2.txt
 
    diff /tmp/output1.txt /tmp/output2.txt
    ```
@@ -441,7 +441,7 @@ PY
    python3 -c "import json; data=json.load(open('.mediahub/registry/index.json')); hashes={e['path']:e.get('hash') for e in data['entries'] if e.get('hash')}; print(json.dumps(hashes, indent=2))" > /tmp/hashes_before.json
 
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_v11_partial index hash --yes
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v11_partial swift run mediahub index hash --yes
 
    # Verify existing hashes unchanged
    cd /tmp/test_lib_v11_partial
@@ -457,7 +457,7 @@ PY
    INDEX_TIME_BEFORE=$(stat -f %m .mediahub/registry/index.json)
 
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_complete index hash --yes
+   MEDIAHUB_LIBRARY=/tmp/test_lib_complete swift run mediahub index hash --yes
 
    INDEX_TIME_AFTER=$(stat -f %m /tmp/test_lib_complete/.mediahub/registry/index.json)
    ```
@@ -482,13 +482,13 @@ PY
    cd /tmp/test_lib_v10
    # First run
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_v10 index hash --yes
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --yes
 
    # Capture index state
    cp /tmp/test_lib_v10/.mediahub/registry/index.json /tmp/index_after_first.json
 
    # Second run
-   swift run mediahub --library /tmp/test_lib_v10 index hash --yes > /tmp/output_second.txt
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --yes > /tmp/output_second.txt
 
    # Compare index states
    diff /tmp/index_after_first.json /tmp/test_lib_v10/.mediahub/registry/index.json
@@ -519,7 +519,7 @@ PY
 1. **Test --limit with deterministic ordering**:
    ```bash
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_v10 index hash --dry-run --limit 2
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --dry-run --limit 2
    ```
    - Expected: Output shows "Files to process: 2" (first 2 by sorted path)
 
@@ -529,7 +529,7 @@ PY
    cp .mediahub/registry/index.json .mediahub/registry/index.json.backup
 
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_v10 index hash --yes --limit 2
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --yes --limit 2
 
    # Verify only 2 hashes computed
    cd /tmp/test_lib_v10
@@ -541,10 +541,10 @@ PY
    ```bash
    # First run: process 2 files
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_v10 index hash --yes --limit 2
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --yes --limit 2
 
    # Second run: process remaining files
-   swift run mediahub --library /tmp/test_lib_v10 index hash --yes
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --yes
    ```
    - Expected: Second run processes remaining files (not already-processed files)
 
@@ -565,7 +565,7 @@ PY
 
 1. **Test dry-run output format**:
    ```bash
-   swift run mediahub --library /tmp/test_lib_v10 index hash --dry-run
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --dry-run
    ```
    - Expected: Output contains:
      - "Hash Coverage Preview"
@@ -582,7 +582,7 @@ PY
    cp .mediahub/registry/index.json .mediahub/registry/index.json.backup
 
    cd /Volumes/Photos/_DevTools/MediaHub
-   echo "yes" | swift run mediahub --library /tmp/test_lib_v11_partial index hash
+   echo "yes" | MEDIAHUB_LIBRARY=/tmp/test_lib_v11_partial swift run mediahub index hash
    ```
    - Expected: Output contains:
      - "Hash Coverage Update"
@@ -597,7 +597,7 @@ PY
 
 3. **Test idempotent no-op output format**:
    ```bash
-   swift run mediahub --library /tmp/test_lib_complete index hash --yes
+   MEDIAHUB_LIBRARY=/tmp/test_lib_complete swift run mediahub index hash --yes
    ```
    - Expected: Output contains:
      - "Hash Coverage Update"
@@ -618,7 +618,7 @@ PY
 
 ## VAL-12: Output Format Validation - JSON
 
-**Objective**: Verify JSON output matches specification examples using pre-existing global JSON mode.
+**Objective**: Verify JSON output matches specification examples using the `--json` flag (defined locally for index hash command, consistent with MediaHubCLI architecture).
 
 **Spec Reference**: Expected Outputs - JSON Output (lines 188-277)
 
@@ -626,7 +626,7 @@ PY
 
 1. **Test dry-run JSON output**:
    ```bash
-   swift run mediahub --library /tmp/test_lib_v10 --json index hash --dry-run | python3 -m json.tool
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --json --dry-run | python3 -m json.tool
    ```
    - Expected: Valid JSON containing:
      - `"dryRun": true`
@@ -641,7 +641,7 @@ PY
    cp .mediahub/registry/index.json .mediahub/registry/index.json.backup
 
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_v11_partial --json index hash --yes | python3 -m json.tool
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v11_partial swift run mediahub index hash --json --yes | python3 -m json.tool
    ```
    - Expected: Valid JSON containing:
      - `"dryRun": false`
@@ -650,7 +650,7 @@ PY
 
 3. **Test idempotent no-op JSON output**:
    ```bash
-   swift run mediahub --library /tmp/test_lib_complete --json index hash --yes | python3 -m json.tool
+   MEDIAHUB_LIBRARY=/tmp/test_lib_complete swift run mediahub index hash --json --yes | python3 -m json.tool
    ```
    - Expected: Valid JSON containing:
      - `"dryRun": false`
@@ -661,7 +661,7 @@ PY
 - ✅ JSON output is valid and parseable
 - ✅ JSON structure matches spec examples
 - ✅ All required fields present
-- ✅ Uses pre-existing global --json flag mode
+- ✅ Uses --json flag (defined locally for index hash command)
 
 ---
 
@@ -670,6 +670,8 @@ PY
 **Objective**: Verify status command reports hash coverage statistics.
 
 **Spec Reference**: Integration with Status Command (lines 279-315)
+
+**Note on JSON behavior**: When baseline index is absent or invalid, the `hashCoverage` field is omitted from the JSON output (not set to null). This is consistent with Swift's JSONEncoder behavior for optional Codable properties - optional fields with nil values are omitted from the JSON output.
 
 **Steps**:
 
@@ -683,10 +685,11 @@ PY
 
 2. **Test status JSON with hash coverage**:
    ```bash
-   swift run mediahub status --json --library /tmp/test_lib_v11_partial | python3 -m json.tool
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v11_partial swift run mediahub status --json | python3 -m json.tool
    ```
    - Expected: Valid JSON containing:
-     - `"hashCoverage": { "percentage": ..., "entriesWithHash": ..., "totalEntries": ... }`
+     - `"hashCoverage": { "totalEntries": ..., "entriesWithHash": ..., "hashCoverage": ... }` (present when index is available)
+     - Note: `hashCoverage` field is omitted (not null) when baseline index is absent or invalid
 
 3. **Test status with v1.0 index (backward compatible)**:
    ```bash
@@ -725,13 +728,13 @@ PY
    echo '{"version":"1.0","created":"2024-01-01T00:00:00Z","lastUpdated":"2024-01-01T00:00:00Z","entryCount":0,"entries":[]}' > .mediahub/registry/index.json
 
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_empty index hash --yes
+   MEDIAHUB_LIBRARY=/tmp/test_lib_empty swift run mediahub index hash --yes
    ```
    - Expected: Reports 0% coverage (0/0), no-op, exit code 0
 
 2. **Test file missing during computation**:
    ```bash
-   swift run mediahub --library /tmp/test_lib_missing_file index hash --yes
+   MEDIAHUB_LIBRARY=/tmp/test_lib_missing_file swift run mediahub index hash --yes
    ```
    - Expected: Error reported for missing file, continues with remaining files, exit code 0
 
@@ -741,7 +744,7 @@ PY
    chmod 000 2024/01/IMG_001.jpg
 
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub --library /tmp/test_lib_v10 index hash --yes
+   MEDIAHUB_LIBRARY=/tmp/test_lib_v10 swift run mediahub index hash --yes
 
    # Restore permissions
    chmod 644 /tmp/test_lib_v10/2024/01/IMG_001.jpg
@@ -869,14 +872,14 @@ Before releasing Slice 9, verify all must-pass items:
 
 ### Output Format
 - [ ] Human-readable output matches spec examples
-- [ ] JSON output matches spec examples (using pre-existing global --json mode)
+- [ ] JSON output matches spec examples (using --json flag, defined locally for index hash)
 - [ ] Output is deterministic (same inputs → same outputs)
 
 ### CLI Contract
 - [ ] Command help text matches spec
 - [ ] Only specified flags present (--dry-run, --limit, --yes)
 - [ ] No --library flag defined (uses existing global resolution)
-- [ ] Respects pre-existing global --json mode
+- [ ] --json flag is defined locally for index hash command (consistent with CLI architecture)
 
 ---
 

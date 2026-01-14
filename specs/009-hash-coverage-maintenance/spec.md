@@ -37,7 +37,7 @@ Without complete hash coverage, hash-based duplicate detection (Slice 8) cannot 
 ### Command Syntax
 
 ```
-mediahub index hash [--dry-run] [--limit N] [--yes]
+mediahub index hash [--dry-run] [--limit N] [--yes] [--json]
 ```
 
 ### Command Description
@@ -46,11 +46,13 @@ Computes missing content hashes (SHA-256) for media files in the library and upd
 
 ### Flags
 
+**Slice 9 specific flags:**
 - `--dry-run`: Enumerate candidates and statistics only; do not compute hashes. Performs zero writes.
 - `--limit N`: Process at most N files (useful for incremental operation or testing). If not specified, processes all files missing hashes.
 - `--yes`: Bypass confirmation prompt for non-interactive execution. Required when not in dry-run mode and not in an interactive terminal.
 
-Note: The `--json` flag is a pre-existing global output mode supported by MediaHubCLI commands. Slice 9 supports JSON output for the `index hash` command using the same pattern as other commands.
+**Output format flag (consistent with MediaHubCLI architecture):**
+- `--json` (or `-j`): Output results in JSON format. This flag is defined locally for the `index hash` command, following the same pattern as other MediaHubCLI commands (e.g., `detect --json`, `import --json`, `status --json`). This is not a Slice 9-specific requirement, but rather follows the existing CLI output formatting convention.
 
 ### Behavior
 
@@ -187,7 +189,7 @@ Completed:
 
 ### JSON Output
 
-**Dry-run mode** (using pre-existing `--json` flag with `--dry-run`):
+**Dry-run mode** (using `--json` flag with `--dry-run`):
 ```json
 {
   "dryRun": true,
@@ -218,7 +220,7 @@ Completed:
 }
 ```
 
-**Normal mode** (using pre-existing `--json` flag):
+**Normal mode** (using `--json` flag):
 ```json
 {
   "dryRun": false,
@@ -247,7 +249,7 @@ Completed:
 }
 ```
 
-**Idempotent no-op** (using pre-existing `--json` flag):
+**Idempotent no-op** (using `--json` flag):
 ```json
 {
   "dryRun": false,
@@ -278,7 +280,9 @@ Completed:
 
 ## Integration with Status Command
 
-The `status` command (Slice 4) MUST be extended to report hash coverage statistics:
+The `status` command (Slice 4) MUST be extended to report hash coverage statistics.
+
+**Note on JSON output behavior**: When using `status --json`, the `hashCoverage` field is included in the JSON output when a baseline index is available. When the baseline index is absent or invalid, the `hashCoverage` field is omitted from the JSON output (not set to null). This is consistent with Swift's JSONEncoder behavior for optional Codable properties.
 
 ### Human-Readable Output Addition
 
@@ -299,6 +303,7 @@ Attached sources:
 
 ### JSON Output Addition
 
+When baseline index is available:
 ```json
 {
   "path": "/path/to/library",
@@ -306,10 +311,21 @@ Attached sources:
   "version": "1.0",
   "sourceCount": 2,
   "hashCoverage": {
-    "percentage": 0.45,
+    "totalEntries": 10000,
     "entriesWithHash": 4500,
-    "totalEntries": 10000
+    "hashCoverage": 0.45
   },
+  "sources": [...]
+}
+```
+
+When baseline index is absent or invalid, the `hashCoverage` field is omitted from the JSON output (not set to null):
+```json
+{
+  "path": "/path/to/library",
+  "identifier": "abc123...",
+  "version": "1.0",
+  "sourceCount": 2,
   "sources": [...]
 }
 ```

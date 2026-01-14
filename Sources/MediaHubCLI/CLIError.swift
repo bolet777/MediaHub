@@ -22,7 +22,7 @@ enum CLIError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .missingLibraryContext:
-            return "Library context is required. Provide --library <path> or set MEDIAHUB_LIBRARY environment variable."
+            return "Library context is required. Set MEDIAHUB_LIBRARY environment variable (e.g., export MEDIAHUB_LIBRARY=/path/to/library) or use --library <path> if supported by this command."
         case .libraryNotFound(let path):
             return "Library not found at path: \(path)"
         case .sourceNotFound(let sourceId):

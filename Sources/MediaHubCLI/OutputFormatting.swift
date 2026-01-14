@@ -337,6 +337,7 @@ struct ImportResultFormatter: OutputFormatter {
 struct StatusFormatter: OutputFormatter {
     let library: OpenedLibrary
     let sources: [Source]
+    let baselineIndex: BaselineIndex?
     let outputFormat: OutputFormat
     
     func format() -> String {
@@ -356,6 +357,16 @@ struct StatusFormatter: OutputFormatter {
         output += "Version: \(library.metadata.libraryVersion)\n"
         output += "Sources: \(sources.count)\n"
         
+        // Hash coverage stats (if baseline index is available)
+        if let index = baselineIndex {
+            output += "\nHash Coverage:\n"
+            output += "  Total entries: \(index.entryCount)\n"
+            output += "  Entries with hash: \(index.hashEntryCount)\n"
+            output += "  Coverage: \(Int(index.hashCoverage * 100))%\n"
+        } else {
+            output += "\nHash Coverage: N/A (baseline index not available)\n"
+        }
+        
         if !sources.isEmpty {
             output += "\nAttached sources:\n"
             for (index, source) in sources.enumerated() {
@@ -373,12 +384,30 @@ struct StatusFormatter: OutputFormatter {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         
+        struct HashCoverageInfo: Codable {
+            let totalEntries: Int
+            let entriesWithHash: Int
+            let hashCoverage: Double
+        }
+        
         struct StatusInfo: Codable {
             let path: String
             let identifier: String
             let version: String
             let sourceCount: Int
             let sources: [Source]
+            let hashCoverage: HashCoverageInfo?
+        }
+        
+        let hashCoverageInfo: HashCoverageInfo?
+        if let index = baselineIndex {
+            hashCoverageInfo = HashCoverageInfo(
+                totalEntries: index.entryCount,
+                entriesWithHash: index.hashEntryCount,
+                hashCoverage: index.hashCoverage
+            )
+        } else {
+            hashCoverageInfo = nil
         }
         
         let statusInfo = StatusInfo(
@@ -386,7 +415,8 @@ struct StatusFormatter: OutputFormatter {
             identifier: library.metadata.libraryId,
             version: library.metadata.libraryVersion,
             sourceCount: sources.count,
-            sources: sources
+            sources: sources,
+            hashCoverage: hashCoverageInfo
         )
         
         guard let data = try? encoder.encode(statusInfo),
@@ -501,5 +531,192 @@ struct LibraryAdoptionIdempotentFormatter: OutputFormatter {
         }
         
         return jsonString
+    }
+}
+
+/// Formats hash coverage maintenance output
+struct HashCoverageFormatter: OutputFormatter {
+    let libraryPath: String
+    let statistics: HashCoverageStatistics
+    let dryRun: Bool
+    let hashesComputed: Int?
+    let hashFailures: Int?
+    let entriesUpdated: Int?
+    let indexUpdated: Bool?
+    let limit: Int?
+    let outputFormat: OutputFormat
+    
+    func format() -> String {
+        switch outputFormat {
+        case .humanReadable:
+            return formatHumanReadable()
+        case .json:
+            return formatJSON()
+        }
+    }
+    
+    private func formatHumanReadable() -> String {
+        if dryRun {
+            var output = "Hash Coverage Preview\n"
+            output += "====================\n\n"
+            output += "Library: \(libraryPath)\n"
+            output += "Total entries: \(statistics.totalEntries)\n"
+            output += "Entries with hash: \(statistics.entriesWithHash)\n"
+            output += "Entries missing hash: \(statistics.entriesMissingHash)\n"
+            output += "Current coverage: \(Int(statistics.hashCoverage * 100))%\n\n"
+            output += "DRY-RUN: Would compute hashes for \(statistics.candidateCount) file(s)\n"
+            if let limit = limit {
+                output += "  (Limited to \(limit) files)\n"
+            }
+            if statistics.missingFilesCount > 0 {
+                output += "  Note: \(statistics.missingFilesCount) entry/entries reference missing files\n"
+            }
+            output += "\nNo hashes will be computed. No changes will be made to the index."
+            return output
+        } else {
+            var output = "Hash Coverage Update Summary\n"
+            output += "===========================\n\n"
+            output += "Library: \(libraryPath)\n\n"
+            output += "Before:\n"
+            output += "  Total entries: \(statistics.totalEntries)\n"
+            output += "  Entries with hash: \(statistics.entriesWithHash)\n"
+            output += "  Coverage: \(Int(statistics.hashCoverage * 100))%\n\n"
+            if let entriesUpdated = entriesUpdated, let indexUpdated = indexUpdated {
+                // After stats (for update result)
+                let afterEntriesWithHash = statistics.entriesWithHash + entriesUpdated
+                let afterCoverage = statistics.totalEntries > 0 ? Double(afterEntriesWithHash) / Double(statistics.totalEntries) : 0.0
+                output += "After:\n"
+                output += "  Total entries: \(statistics.totalEntries)\n"
+                output += "  Entries with hash: \(afterEntriesWithHash)\n"
+                output += "  Coverage: \(Int(afterCoverage * 100))%\n\n"
+                if let hashesComputed = hashesComputed {
+                    output += "Hashes computed: \(hashesComputed)\n"
+                }
+                if let hashFailures = hashFailures, hashFailures > 0 {
+                    output += "Hash computation failures: \(hashFailures)\n"
+                }
+                if let limit = limit {
+                    output += "  (Limited to \(limit) files)\n"
+                }
+                output += "Entries updated: \(entriesUpdated)\n"
+                output += "Index updated: \(indexUpdated ? "yes" : "no")\n"
+                if !indexUpdated {
+                    output += "  (No changes needed - coverage already complete)\n"
+                }
+            } else {
+                // Before stats only (for computation result)
+                if let hashesComputed = hashesComputed {
+                    output += "Hashes computed: \(hashesComputed)\n"
+                }
+                if let hashFailures = hashFailures, hashFailures > 0 {
+                    output += "Hash computation failures: \(hashFailures)\n"
+                }
+                if let limit = limit {
+                    output += "  (Limited to \(limit) files)\n"
+                }
+            }
+            return output
+        }
+    }
+    
+    private func formatJSON() -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
+        if dryRun {
+            struct DryRunOutput: Codable {
+                let dryRun: Bool
+                let library: String
+                let statistics: HashCoverageStatisticsJSON
+                let limit: Int?
+            }
+            
+            struct HashCoverageStatisticsJSON: Codable {
+                let totalEntries: Int
+                let entriesWithHash: Int
+                let entriesMissingHash: Int
+                let candidateCount: Int
+                let missingFilesCount: Int
+                let hashCoverage: Double
+            }
+            
+            let statsJSON = HashCoverageStatisticsJSON(
+                totalEntries: statistics.totalEntries,
+                entriesWithHash: statistics.entriesWithHash,
+                entriesMissingHash: statistics.entriesMissingHash,
+                candidateCount: statistics.candidateCount,
+                missingFilesCount: statistics.missingFilesCount,
+                hashCoverage: statistics.hashCoverage
+            )
+            
+            let output = DryRunOutput(
+                dryRun: true,
+                library: libraryPath,
+                statistics: statsJSON,
+                limit: limit
+            )
+            
+            guard let data = try? encoder.encode(output),
+                  let jsonString = String(data: data, encoding: .utf8) else {
+                return "{}"
+            }
+            return jsonString
+        } else {
+            struct UpdateOutput: Codable {
+                let library: String
+                let before: HashCoverageStatisticsJSON
+                let after: HashCoverageStatisticsJSON?
+                let hashesComputed: Int?
+                let hashFailures: Int?
+                let entriesUpdated: Int?
+                let indexUpdated: Bool?
+                let limit: Int?
+            }
+            
+            struct HashCoverageStatisticsJSON: Codable {
+                let totalEntries: Int
+                let entriesWithHash: Int
+                let entriesMissingHash: Int
+                let hashCoverage: Double
+            }
+            
+            let beforeJSON = HashCoverageStatisticsJSON(
+                totalEntries: statistics.totalEntries,
+                entriesWithHash: statistics.entriesWithHash,
+                entriesMissingHash: statistics.entriesMissingHash,
+                hashCoverage: statistics.hashCoverage
+            )
+            
+            let afterJSON: HashCoverageStatisticsJSON?
+            if let entriesUpdated = entriesUpdated {
+                let afterEntriesWithHash = statistics.entriesWithHash + entriesUpdated
+                let afterCoverage = statistics.totalEntries > 0 ? Double(afterEntriesWithHash) / Double(statistics.totalEntries) : 0.0
+                afterJSON = HashCoverageStatisticsJSON(
+                    totalEntries: statistics.totalEntries,
+                    entriesWithHash: afterEntriesWithHash,
+                    entriesMissingHash: statistics.totalEntries - afterEntriesWithHash,
+                    hashCoverage: afterCoverage
+                )
+            } else {
+                afterJSON = nil
+            }
+            
+            let output = UpdateOutput(
+                library: libraryPath,
+                before: beforeJSON,
+                after: afterJSON,
+                hashesComputed: hashesComputed,
+                hashFailures: hashFailures,
+                entriesUpdated: entriesUpdated,
+                indexUpdated: indexUpdated,
+                limit: limit
+            )
+            
+            guard let data = try? encoder.encode(output),
+                  let jsonString = String(data: data, encoding: .utf8) else {
+                return "{}"
+            }
+            return jsonString
+        }
     }
 }
