@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Slice 8] - 2026-01-14
+
+### What: Advanced Hashing & Deduplication
+
+**Feature**: Content-based duplicate detection using SHA-256 hashing, extending the baseline index to support hash storage and enabling cross-source duplicate detection.
+
+**Changes**:
+- Baseline Index v1.1: Optional hash field in IndexEntry with backward compatibility (v1.0 indexes decode without changes)
+- Import pipeline: Computes and stores content hashes for imported destination files only (read-only on sources)
+- Detection pipeline: Computes source file hashes and compares against library hashSet to detect duplicates by content (read-only, no index writes)
+- CLI output: Human-readable and JSON output include duplicate metadata (hash, library path, reason) and hash coverage statistics
+- Cross-source duplicate detection: Detects duplicates even when files have different paths or names
+
+**Why**: Enables content-based duplicate detection across sources, detecting duplicates even when files have different paths or names. This complements path-based known-items tracking with content-based deduplication.
+
+**Safety**:
+- **Backward compatible**: v1.0 indexes decode without changes (hash field optional)
+- **Read-only detection**: `detect` never writes to index, only reads (hash computation is read-only)
+- **Non-fatal hashing**: Hash computation failures don't block import/detect operations (hash omitted, operation continues)
+- **Deterministic**: Same file content always produces same hash
+- **Idempotent**: Same imported file -> same hash field in index
+- **Dry-run safe**: `import --dry-run` performs zero hash computation and zero index writes
+
+**Technical Details**:
+- Hash format: SHA-256 in format "sha256:<64-char-hexdigest>"
+- Streaming computation: Files read in 64KB chunks for constant memory usage
+- Index version: Automatically set to "1.1" if any entry has hash, "1.0" otherwise
+- Hash lookup: `hashSet` and `hashToAnyPath` computed properties for O(1) duplicate detection
+- Duplicate metadata: `duplicateOfHash`, `duplicateOfLibraryPath`, `duplicateReason` in detection results
+- JSON backward compatible: New fields are optional and omitted if nil
+
+**Files Added**:
+- `Sources/MediaHub/ContentHashing.swift` (SHA-256 streaming hash computation)
+- `Tests/MediaHubTests/ContentHashingTests.swift` (hash computation tests)
+- `specs/008-advanced-hashing-dedup/` (specification, plan, tasks)
+
+**Files Modified**:
+- `Sources/MediaHub/BaselineIndex.swift` (v1.1 support, hash lookup properties)
+- `Sources/MediaHub/DetectionOrchestration.swift` (source hash computation and duplicate detection)
+- `Sources/MediaHub/DetectionResult.swift` (duplicate metadata fields)
+- `Sources/MediaHub/ImportExecution.swift` (hash computation after successful file copy)
+- `Sources/MediaHubCLI/OutputFormatting.swift` (CLI output for duplicate metadata)
+- `Tests/MediaHubTests/BaselineIndexTests.swift` (v1.1 tests)
+- `Tests/MediaHubTests/ImportExecutionTests.swift` (hash storage tests)
+
+---
+
 ## [Slice 7] - 2026-01-14
 
 ### What: Baseline Index

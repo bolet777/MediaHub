@@ -81,7 +81,24 @@ The MediaHub core is fully implemented, tested, and validated through the follow
   - Read‑only guarantees for detection operations
   - Safety‑first error handling
 
-All five slices are frozen and covered by automated validation.
+- **Slice 6 — Library Adoption**
+  - Adopt existing library directories organized in YYYY/MM
+  - Baseline scan of existing media files
+  - Idempotent adoption (safe re-runs)
+
+- **Slice 7 — Baseline Index**
+  - Persistent baseline index for fast library content queries
+  - Incremental index updates during import
+  - Read-only index usage in detect (fallback to full scan if needed)
+
+- **Slice 8 — Advanced Hashing & Deduplication**
+  - Content-based duplicate detection using SHA-256 hashing
+  - Cross-source duplicate detection (detects duplicates even with different paths)
+  - Baseline Index v1.1 with optional hash storage
+  - Hash computation and storage during import
+  - Hash-based duplicate detection during detect
+
+All eight slices are frozen and covered by automated validation.
 
 ---
 
@@ -219,44 +236,31 @@ swift test
 
 ---
 
-## Explicitly Out of Scope (As of Slice 5)
+## Explicitly Out of Scope (As of Slice 8)
 
 - Photos.app or device‑specific integrations
 - User interface / media browsing
-- Advanced duplicate detection (hashing, fuzzy matching) — planned for Slice 8
 - Metadata enrichment (tags, faces, albums)
 - Pipelines, automation, or scheduling
 - Cloud sync or backup features
-- Library adoption — planned for Slice 6
 
 ---
 
 ## Roadmap
 
-### Completed Slices (1–5)
+### Completed Slices (1–8)
 - ✅ **Slice 1**: Library Entity & Identity
 - ✅ **Slice 2**: Sources & Import Detection
 - ✅ **Slice 3**: Import Execution & Media Organization
 - ✅ **Slice 4**: CLI Tool & Packaging
 - ✅ **Slice 5**: Safety Features & Dry‑Run Operations
+- ✅ **Slice 6**: Library Adoption
+- ✅ **Slice 7**: Baseline Index
+- ✅ **Slice 8**: Advanced Hashing & Deduplication
 
 ### Planned Slices
 
-- **Slice 6 — Library Adoption**
-  - Adopt existing media libraries (YYYY/MM structure) as MediaHub libraries
-  - Create `.mediahub/` metadata without modifying existing media files
-  - Command: `mediahub library adopt <path>`
-  - No‑touch guarantee for existing media
-
-- **Slice 7 — Baseline Index**
-  - Performance optimization for large libraries
-  - Create baseline index of existing media files
-  - Incremental index updates
-
-- **Slice 8 — Advanced Hashing & Deduplication**
-  - Content‑based file identification (hash/checksum)
-  - Cross‑source duplicate detection
-  - Global deduplication beyond path‑based known‑items
+- Future slices: Additional features and enhancements
 
 For detailed status and decisions, see `specs/STATUS.md`.
 

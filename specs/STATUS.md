@@ -2,7 +2,7 @@
 
 **Document Type**: Project Status & Roadmap Tracking  
 **Purpose**: Memory of project state, decisions, and planned slices  
-**Last Updated**: 2026-01-27  
+**Last Updated**: 2026-01-14  
 **Next Review**: After Slice 7 or after real-world usage  
 **Note**: This is a tracking document, not a normative specification. For authoritative specs, see individual slice specifications in `specs/`.
 
@@ -87,10 +87,6 @@
 - Idempotent adoption (safe re-runs on already adopted libraries)
 - Integration with existing `detect` and `import` commands for incremental imports
 
----
-
-## Planned Slices
-
 ### ✅ Slice 7 — Baseline Index
 **Status**: Complete and validated (2026-01-14)  
 **Spec**: `specs/007-baseline-index/`  
@@ -101,20 +97,21 @@
 - `detect` read-only: utilise l'index si valide, fallback sinon (raison reportée)
 - `import` update incrémental atomique, dry-run = 0 write, update seulement si index valide au début
 
-### 🔲 Slice 8 — Advanced Hashing & Deduplication
-**Status**: Planned (future)
+### ✅ Slice 8 — Advanced Hashing & Deduplication
+**Status**: Complete and validated (2026-01-14)  
+**Spec**: `specs/008-advanced-hashing-dedup/spec.md`
 
-**Objective**: Cross-source deduplication using content hashing (SHA-256 or similar) to identify duplicate media files across different sources.
+**Deliverables**:
+- Baseline Index v1.1: Optional hash field in IndexEntry with backward compatibility (v1.0 indexes decode without changes)
+- Content-based duplicate detection using SHA-256 hashing
+- Import pipeline: Computes and stores content hashes for imported destination files only
+- Detection pipeline: Computes source file hashes and compares against library hashSet to detect duplicates by content (read-only, no index writes)
+- CLI output: Human-readable and JSON output include duplicate metadata (hash, library path, reason) and hash coverage statistics
+- Cross-source duplicate detection: Detects duplicates even when files have different paths or names
 
-**Proposed Features**:
-- Content-based file identification (hash/checksum)
-- Cross-source duplicate detection
-- Global deduplication (beyond path-based known-items tracking)
-- Optional hash storage in baseline index (complements Slice 7)
+---
 
-**Note**: Currently, known-items tracking is path-based and source-scoped. Hashing enables content-based deduplication across sources, detecting duplicates even when files have different paths or names.
-
-**Dependency**: Can leverage Slice 7 baseline index for hash storage, but is independent in functionality. Slice 8 improves deduplication capabilities beyond current path-based detection.
+## Planned Slices
 
 ---
 
@@ -152,13 +149,13 @@
 - Incremental imports: after adoption, `detect` and `import` commands work normally and only add new items
 
 **What's Next**:
-- Slice 8: Advanced hashing and cross-source deduplication
+- Future slices: Additional features and enhancements
 
 ---
 
 ## Analysis Reports
 
-### Library Adoption Analysis (2026-01-27)
+### Library Adoption Analysis (2026-01-13)
 **Document**: `specs/archive/RAPPORT_ADOPTION_LIBRAIRIE.md`
 
 **Key Findings** (historical reference):
@@ -176,7 +173,6 @@
 
 - Photos.app or device-specific integrations
 - User interface / media browsing
-- Advanced duplicate detection (hashing, fuzzy matching) — planned for Slice 8
 - Metadata enrichment (tags, faces, albums)
 - Pipelines, automation, or scheduling
 - Cloud sync or backup features
@@ -193,4 +189,4 @@
 ---
 
 **Last Updated**: 2026-01-14  
-**Next Review**: After Slice 8 or after real-world usage
+**Next Review**: After real-world usage or next planned slice
