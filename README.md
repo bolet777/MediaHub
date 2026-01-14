@@ -124,18 +124,13 @@ All eight slices are frozen and covered by automated validation.
 
 ### Library Adoption
 
-**Status**: ⚠️ **Not yet implemented** (planned for Slice 6)
+**Status**: ✅ Implemented (Slice 6)
 
-**What MediaHub can do today**:
-- Open existing MediaHub libraries (with `.mediahub/library.json`)
-- Import into libraries that already contain media files (collision handling works correctly)
-- Detect existing media files in libraries via `LibraryContentQuery` (baseline scan works)
+MediaHub can adopt an existing filesystem library already organized as `YYYY/MM` by creating the `.mediahub/` metadata directory **without modifying existing media files**.
 
-**What MediaHub cannot do yet**:
-- Adopt an existing library (e.g., `/Volumes/Photos/Photos/Librairie_Amateur` organized in YYYY/MM) by creating `.mediahub/` metadata without modifying existing media files
-- Bootstrap a "virgin" library (existing YYYY/MM structure without MediaHub metadata) with a dedicated command
-
-**Note**: Library adoption is architecturally compatible and planned for Slice 6. The core system already supports working with existing media files, but there is no explicit command to adopt a non-legacy library. See `specs/archive/RAPPORT_ADOPTION_LIBRAIRIE.md` for detailed analysis.
+- Adoption performs a baseline scan and creates an initial index.
+- Adoption is idempotent and safe to re-run.
+- External tools can continue to access the media files directly.
 
 ---
 
@@ -239,7 +234,7 @@ swift test
 ## Explicitly Out of Scope (As of Slice 8)
 
 - Photos.app or device‑specific integrations
-- User interface / media browsing
+- UI-driven business logic (the desktop UI is planned; business logic stays in core/CLI)
 - Metadata enrichment (tags, faces, albums)
 - Pipelines, automation, or scheduling
 - Cloud sync or backup features
@@ -248,21 +243,43 @@ swift test
 
 ## Roadmap
 
+### North Star
+A transparent, safety-first macOS desktop app for importing, organizing, auditing, and maintaining large photo/video libraries — with a CLI backend that remains scriptable and deterministic.
+
+### Product Pillars
+- **Safety & Trust**: no-touch rules, explicit confirmations, dry-run guarantees.
+- **Determinism & Idempotence**: reproducible outcomes, interruption-safe operations.
+- **Scalability**: large libraries, incremental indexing, bounded operations.
+- **Auditability**: explainable decisions, reportable outputs, traceable state.
+- **Desktop Experience**: a modern macOS UI that uses the CLI/core as a backend.
+
 ### Completed Slices (1–8)
-- ✅ **Slice 1**: Library Entity & Identity
-- ✅ **Slice 2**: Sources & Import Detection
-- ✅ **Slice 3**: Import Execution & Media Organization
-- ✅ **Slice 4**: CLI Tool & Packaging
-- ✅ **Slice 5**: Safety Features & Dry‑Run Operations
-- ✅ **Slice 6**: Library Adoption
-- ✅ **Slice 7**: Baseline Index
-- ✅ **Slice 8**: Advanced Hashing & Deduplication
+- ✅ Slice 1: Library Entity & Identity
+- ✅ Slice 2: Sources & Import Detection
+- ✅ Slice 3: Import Execution & Media Organization
+- ✅ Slice 4: CLI Tool & Packaging
+- ✅ Slice 5: Safety Features & Dry‑Run Operations
+- ✅ Slice 6: Library Adoption
+- ✅ Slice 7: Baseline Index
+- ✅ Slice 8: Advanced Hashing & Deduplication
 
-### Planned Slices
+### Planned Slices (Next)
+- ▶️ **Slice 9 — Hash Coverage & Maintenance**
+  - Add `mediahub index hash [--dry-run] [--limit N] [--yes]` to compute missing hashes for existing library files.
+  - Integrate hash coverage reporting into `mediahub status`.
+  - Batch/incremental/idempotent; no deletion/merge.
 
-- Future slices: Additional features and enhancements
+- ▶️ **Slice 9b — Duplicate Reporting & Audit**
+  - Report duplicate groups by hash; export JSON/CSV for human review.
 
-For detailed status and decisions, see `specs/STATUS.md`.
+- ▶️ **Slice 9c — Performance & Scale Guardrails**
+  - Benchmarks, regression guardrails, and operational limits for very large libraries.
+
+- ▶️ **Desktop App Track (Macro Epic)**
+  - UI shell that orchestrates the same workflows as the CLI (libraries, sources, detect, import, status).
+  - No business logic in UI; core remains the source of truth.
+
+For detailed status and per-slice validation, see `specs/STATUS.md`.
 
 ---
 

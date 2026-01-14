@@ -8,6 +8,25 @@
 
 ---
 
+## Macro Roadmap
+
+**North Star**: MediaHub provides a reliable, transparent, and scalable media library system that replaces Photos.app for users who need filesystem-first control, deterministic workflows, and long-term maintainability.
+
+See README.md for the authoritative North Star and product vision; STATUS.md focuses on execution and slice-level tracking.
+
+**Pillars**:
+1. **Reliability & Maintainability**: CLI-first architecture with deterministic behavior, comprehensive testing, and clear operational boundaries
+2. **Transparency & Interoperability**: Filesystem-first storage that remains accessible to external tools without proprietary containers or lock-in
+3. **Scalability & Performance**: Support for large libraries, multiple libraries, and long-term usage without degradation
+4. **Content Integrity & Deduplication**: Hash-based duplicate detection and content verification to ensure data safety and prevent accidental duplication
+5. **User Experience & Safety**: Simple workflows with explicit confirmations, dry-run previews, and auditable operations
+
+**Current Focus**: CLI-first reliability & maintainability
+
+The CLI is treated as the backend and source of truth for a future macOS desktop application.
+
+---
+
 ## Completed Slices
 
 ### ✅ Slice 1 — Library Entity & Identity
@@ -113,6 +132,21 @@
 
 ## Planned Slices
 
+| Slice | Title | Goal | Pillar | Depends on | Track | Status |
+|-------|-------|------|--------|------------|-------|--------|
+| 9 | Hash Coverage & Maintenance | Enable users to compute and maintain hash coverage for existing libraries via `index hash` command, with status integration showing hash coverage statistics | Content Integrity & Deduplication | Slice 8 | Core / CLI | Proposed |
+| 9b | Duplicate Reporting & Audit | Provide comprehensive duplicate reporting and audit capabilities to help users understand duplicate content across sources and libraries | Content Integrity & Deduplication | Slice 8, Slice 9 | Core / CLI | Proposed |
+| 9c | Performance & Scale Guardrails | Establish performance benchmarks, scale testing, and guardrails to ensure MediaHub maintains acceptable performance as libraries grow | Scalability & Performance | Slice 8 | Core / CLI | Proposed |
+
+### Desktop App Track (Macro)
+
+The desktop application is treated as a separate macro track.
+It orchestrates existing CLI workflows (library, sources, detect, import, status)
+but does not introduce new business logic.
+
+Desktop UI slices will be tracked separately once the CLI backend is considered
+functionally complete and stable.
+
 ---
 
 ## Key Architectural Decisions
@@ -172,7 +206,7 @@
 ## Out of Scope (Current)
 
 - Photos.app or device-specific integrations
-- User interface / media browsing
+- UI-driven business logic (the desktop UI is planned; business logic remains in core/CLI)
 - Metadata enrichment (tags, faces, albums)
 - Pipelines, automation, or scheduling
 - Cloud sync or backup features
