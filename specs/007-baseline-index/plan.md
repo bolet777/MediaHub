@@ -45,7 +45,7 @@ This plan adheres to the MediaHub Constitution:
 - Implement index reader (load from JSON, parse, validate)
 - Implement index writer (serialize to JSON, atomic write-then-rename)
 - Implement index validator (check file exists, JSON valid, version supported, entries present)
-- Ensure deterministic JSON encoding (entries sorted by path, stable key order)
+- Ensure deterministic JSON encoding (entries sorted by normalized path, JSONEncoder with stable options documented — key order is not a contract)
 - Ensure path normalization (relative to library root, resolved symlinks, consistent separators)
 - Handle index errors gracefully (missing, corrupted, invalid version)
 - Validate index file paths (never write outside library root)
@@ -371,7 +371,7 @@ This plan adheres to the MediaHub Constitution:
 **Validation Points**:
 - All unit tests pass (index reader/writer, validator, format)
 - All integration tests pass (adopt/import/detect workflows)
-- Performance tests show >=5x speedup for 10k+ files
+- Performance tests show >=5x speedup for 10k+ files (optional/non-blocking, measured on same machine and dataset)
 - All existing tests still pass (no regression)
 - Dry-run tests verify zero writes to `index.json`
 - Atomic write tests verify temp file + rename pattern
@@ -546,11 +546,11 @@ This plan adheres to the MediaHub Constitution:
 
 ### Performance Tests
 
-**BaselineIndexPerformanceTests.swift** (new):
-- Test index load performance (target: < 100ms for 10k entries)
-- Test index write performance (target: < 100ms for 10k entries)
-- Test detection performance with index (target: >=5x faster than full-scan on 10k+ files)
-- Test detection performance without index (baseline for comparison)
+**BaselineIndexPerformanceTests.swift** (new, optional/non-blocking):
+- Test index load performance (measure relative to full-scan time on same dataset and machine — indicative, not contractual)
+- Test index write performance (measure relative to import operation time on same dataset — indicative, not contractual)
+- Test detection performance with index (target: >=5x faster than full-scan on 10k+ files, measured on same machine and dataset)
+- Test detection performance without index (baseline for comparison on same dataset)
 
 **Test Datasets**:
 - Synthetic library with 10,000+ media files (for performance tests)
@@ -619,9 +619,9 @@ This plan adheres to the MediaHub Constitution:
 **Strategy**: Use `JSONEncoder` with sorted keys option and sort entries array by path
 
 **Implementation**:
-- Sort index entries by normalized path before encoding
-- Use `JSONEncoder` with `sortedKeys` option (if available) or custom sorting
-- Ensure consistent field order in JSON output
+- Sort index entries by normalized path before encoding (deterministic order)
+- Use `JSONEncoder` with stable options (documented in code — key order is not a contract)
+- Determinism achieved through sorted entries and normalized paths, not through key order
 
 ### Path Normalization
 
