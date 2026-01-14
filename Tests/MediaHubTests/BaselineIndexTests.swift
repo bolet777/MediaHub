@@ -388,4 +388,311 @@ final class BaselineIndexTests: XCTestCase {
         let tempFiles = contents.filter { $0.contains(".mediahub-tmp-") }
         XCTAssertEqual(tempFiles.count, 0, "No temporary files should remain after write")
     }
+    
+    // MARK: - v1.1 Hash Support Tests
+    
+    func testIndexVersion1_0WhenNoHashes() throws {
+        // Create index without hashes
+        let entries = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 1000, mtime: "2024-01-01T00:00:00Z"),
+            IndexEntry(path: "2024/02/file2.jpg", size: 2000, mtime: "2024-01-02T00:00:00Z")
+        ]
+        let index = BaselineIndex(entries: entries)
+        
+        // Should be version 1.0
+        XCTAssertEqual(index.version, "1.0")
+    }
+    
+    func testIndexVersion1_1WhenAnyHashPresent() throws {
+        // Create index with at least one hash
+        let entries = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 1000, mtime: "2024-01-01T00:00:00Z", hash: "sha256:abc123"),
+            IndexEntry(path: "2024/02/file2.jpg", size: 2000, mtime: "2024-01-02T00:00:00Z")
+        ]
+        let index = BaselineIndex(entries: entries)
+        
+        // Should be version 1.1
+        XCTAssertEqual(index.version, "1.1")
+    }
+    
+    func testIndexVersion1_1WhenAllHashesPresent() throws {
+        // Create index with all hashes
+        let entries = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 1000, mtime: "2024-01-01T00:00:00Z", hash: "sha256:abc123"),
+            IndexEntry(path: "2024/02/file2.jpg", size: 2000, mtime: "2024-01-02T00:00:00Z", hash: "sha256:def456")
+        ]
+        let index = BaselineIndex(entries: entries)
+        
+        // Should be version 1.1
+        XCTAssertEqual(index.version, "1.1")
+    }
+    
+    func testReaderLoadsV1_0IndexWithoutHash() throws {
+        // Create v1.0 index JSON (without hash field)
+        let indexPath = tempDirectory.appendingPathComponent("v1_0_index.json").path
+        let v1_0JSON = """
+        {
+            "version": "1.0",
+            "created": "2024-01-01T00:00:00Z",
+            "lastUpdated": "2024-01-01T00:00:00Z",
+            "entryCount": 2,
+            "entries": [
+                {
+                    "path": "2024/01/file1.jpg",
+                    "size": 1000,
+                    "mtime": "2024-01-01T00:00:00Z"
+                },
+                {
+                    "path": "2024/02/file2.jpg",
+                    "size": 2000,
+                    "mtime": "2024-01-02T00:00:00Z"
+                }
+            ]
+        }
+        """
+        try v1_0JSON.write(toFile: indexPath, atomically: true, encoding: .utf8)
+        
+        // Load index
+        let loadedIndex = try BaselineIndexReader.load(from: indexPath)
+        
+        // Verify version and entries
+        XCTAssertEqual(loadedIndex.version, "1.0")
+        XCTAssertEqual(loadedIndex.entryCount, 2)
+        XCTAssertNil(loadedIndex.entries[0].hash)
+        XCTAssertNil(loadedIndex.entries[1].hash)
+    }
+    
+    func testReaderLoadsV1_1IndexWithHash() throws {
+        // Create v1.1 index JSON (with hash field)
+        let indexPath = tempDirectory.appendingPathComponent("v1_1_index.json").path
+        let v1_1JSON = """
+        {
+            "version": "1.1",
+            "created": "2024-01-01T00:00:00Z",
+            "lastUpdated": "2024-01-01T00:00:00Z",
+            "entryCount": 2,
+            "entries": [
+                {
+                    "path": "2024/01/file1.jpg",
+                    "size": 1000,
+                    "mtime": "2024-01-01T00:00:00Z",
+                    "hash": "sha256:abc123"
+                },
+                {
+                    "path": "2024/02/file2.jpg",
+                    "size": 2000,
+                    "mtime": "2024-01-02T00:00:00Z"
+                }
+            ]
+        }
+        """
+        try v1_1JSON.write(toFile: indexPath, atomically: true, encoding: .utf8)
+        
+        // Load index
+        let loadedIndex = try BaselineIndexReader.load(from: indexPath)
+        
+        // Verify version and entries
+        XCTAssertEqual(loadedIndex.version, "1.1")
+        XCTAssertEqual(loadedIndex.entryCount, 2)
+        XCTAssertEqual(loadedIndex.entries[0].hash, "sha256:abc123")
+        XCTAssertNil(loadedIndex.entries[1].hash)
+    }
+    
+    func testWriterEncodesV1_0WhenNoHashes() throws {
+        // Create index without hashes
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRoot)
+        let entries = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 1000, mtime: "2024-01-01T00:00:00Z"),
+            IndexEntry(path: "2024/02/file2.jpg", size: 2000, mtime: "2024-01-02T00:00:00Z")
+        ]
+        let index = BaselineIndex(entries: entries)
+        
+        // Write index
+        try BaselineIndexWriter.write(index, to: indexPath, libraryRoot: libraryRoot)
+        
+        // Load and verify
+        let loadedIndex = try BaselineIndexReader.load(from: indexPath)
+        XCTAssertEqual(loadedIndex.version, "1.0")
+        
+        // Verify JSON doesn't contain hash field
+        let jsonData = try Data(contentsOf: URL(fileURLWithPath: indexPath))
+        let jsonString = String(data: jsonData, encoding: .utf8)!
+        XCTAssertFalse(jsonString.contains("\"hash\""), "JSON should not contain hash field for v1.0")
+    }
+    
+    func testWriterEncodesV1_1WhenHashesPresent() throws {
+        // Create index with hashes
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRoot)
+        let entries = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 1000, mtime: "2024-01-01T00:00:00Z", hash: "sha256:abc123"),
+            IndexEntry(path: "2024/02/file2.jpg", size: 2000, mtime: "2024-01-02T00:00:00Z", hash: "sha256:def456")
+        ]
+        let index = BaselineIndex(entries: entries)
+        
+        // Write index
+        try BaselineIndexWriter.write(index, to: indexPath, libraryRoot: libraryRoot)
+        
+        // Load and verify
+        let loadedIndex = try BaselineIndexReader.load(from: indexPath)
+        XCTAssertEqual(loadedIndex.version, "1.1")
+        XCTAssertEqual(loadedIndex.entries[0].hash, "sha256:abc123")
+        XCTAssertEqual(loadedIndex.entries[1].hash, "sha256:def456")
+    }
+    
+    func testWriterOmitNilHashFromJSON() throws {
+        // Create index with mixed hashes (some nil)
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRoot)
+        let entries = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 1000, mtime: "2024-01-01T00:00:00Z", hash: "sha256:abc123"),
+            IndexEntry(path: "2024/02/file2.jpg", size: 2000, mtime: "2024-01-02T00:00:00Z")
+        ]
+        let index = BaselineIndex(entries: entries)
+        
+        // Write index
+        try BaselineIndexWriter.write(index, to: indexPath, libraryRoot: libraryRoot)
+        
+        // Load and verify entries directly
+        let loadedIndex = try BaselineIndexReader.load(from: indexPath)
+        XCTAssertEqual(loadedIndex.entryCount, 2)
+        
+        // Find entries by path
+        let entry1 = loadedIndex.entries.first { $0.path == "2024/01/file1.jpg" }
+        let entry2 = loadedIndex.entries.first { $0.path == "2024/02/file2.jpg" }
+        
+        XCTAssertNotNil(entry1, "First entry should exist")
+        XCTAssertNotNil(entry2, "Second entry should exist")
+        
+        // First entry should have hash
+        XCTAssertEqual(entry1?.hash, "sha256:abc123", "First entry should have hash")
+        
+        // Second entry should not have hash
+        XCTAssertNil(entry2?.hash, "Second entry should not have hash")
+        
+        // Verify JSON doesn't contain hash field for second entry
+        let jsonData = try Data(contentsOf: URL(fileURLWithPath: indexPath))
+        let jsonString = String(data: jsonData, encoding: .utf8)!
+        
+        // JSON should contain hash for first entry
+        XCTAssertTrue(jsonString.contains("\"hash\":\"sha256:abc123\""), "JSON should contain hash for first entry")
+        
+        // JSON should not contain hash field for second entry (only path, size, mtime)
+        // Count occurrences of "hash" - should be exactly 1 (for first entry only)
+        let hashCount = jsonString.components(separatedBy: "\"hash\"").count - 1
+        XCTAssertEqual(hashCount, 1, "JSON should contain exactly one hash field")
+    }
+    
+    func testHashToAnyPath() throws {
+        // Create index with hashes (some duplicates)
+        let entries = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 1000, mtime: "2024-01-01T00:00:00Z", hash: "sha256:abc123"),
+            IndexEntry(path: "2024/02/file2.jpg", size: 2000, mtime: "2024-01-02T00:00:00Z", hash: "sha256:def456"),
+            IndexEntry(path: "2024/03/file3.jpg", size: 3000, mtime: "2024-01-03T00:00:00Z", hash: "sha256:abc123"), // Duplicate hash
+            IndexEntry(path: "2024/04/file4.jpg", size: 4000, mtime: "2024-01-04T00:00:00Z") // No hash
+        ]
+        let index = BaselineIndex(entries: entries)
+        
+        // Test hashToAnyPath
+        let hashToPath = index.hashToAnyPath
+        
+        // Should have 2 unique hashes
+        XCTAssertEqual(hashToPath.count, 2)
+        
+        // First hash should map to first path (deterministic: sorted order)
+        XCTAssertEqual(hashToPath["sha256:abc123"], "2024/01/file1.jpg")
+        XCTAssertEqual(hashToPath["sha256:def456"], "2024/02/file2.jpg")
+        
+        // Entry without hash should not appear
+        XCTAssertFalse(hashToPath.values.contains("2024/04/file4.jpg"))
+    }
+    
+    func testHashSet() throws {
+        // Create index with hashes
+        let entries = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 1000, mtime: "2024-01-01T00:00:00Z", hash: "sha256:abc123"),
+            IndexEntry(path: "2024/02/file2.jpg", size: 2000, mtime: "2024-01-02T00:00:00Z", hash: "sha256:def456"),
+            IndexEntry(path: "2024/03/file3.jpg", size: 3000, mtime: "2024-01-03T00:00:00Z", hash: "sha256:abc123"), // Duplicate hash
+            IndexEntry(path: "2024/04/file4.jpg", size: 4000, mtime: "2024-01-04T00:00:00Z") // No hash
+        ]
+        let index = BaselineIndex(entries: entries)
+        
+        // Test hashSet
+        let hashSet = index.hashSet
+        
+        // Should have 2 unique hashes (duplicate is deduplicated)
+        XCTAssertEqual(hashSet.count, 2)
+        XCTAssertTrue(hashSet.contains("sha256:abc123"))
+        XCTAssertTrue(hashSet.contains("sha256:def456"))
+    }
+    
+    func testHashEntryCount() throws {
+        // Create index with mixed hashes
+        let entries = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 1000, mtime: "2024-01-01T00:00:00Z", hash: "sha256:abc123"),
+            IndexEntry(path: "2024/02/file2.jpg", size: 2000, mtime: "2024-01-02T00:00:00Z"),
+            IndexEntry(path: "2024/03/file3.jpg", size: 3000, mtime: "2024-01-03T00:00:00Z", hash: "sha256:def456")
+        ]
+        let index = BaselineIndex(entries: entries)
+        
+        // Should have 2 entries with hash
+        XCTAssertEqual(index.hashEntryCount, 2)
+    }
+    
+    func testHashCoverage() throws {
+        // Create index with mixed hashes
+        let entries = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 1000, mtime: "2024-01-01T00:00:00Z", hash: "sha256:abc123"),
+            IndexEntry(path: "2024/02/file2.jpg", size: 2000, mtime: "2024-01-02T00:00:00Z"),
+            IndexEntry(path: "2024/03/file3.jpg", size: 3000, mtime: "2024-01-03T00:00:00Z", hash: "sha256:def456")
+        ]
+        let index = BaselineIndex(entries: entries)
+        
+        // Should have 2/3 = 0.666... coverage
+        XCTAssertEqual(index.hashCoverage, 2.0 / 3.0, accuracy: 0.001)
+    }
+    
+    func testHashCoverageEmptyIndex() throws {
+        // Create empty index
+        let index = BaselineIndex(entries: [])
+        
+        // Should have 0.0 coverage
+        XCTAssertEqual(index.hashCoverage, 0.0)
+    }
+    
+    func testUpdatingIndexVersionChangesWhenHashAdded() throws {
+        // Start with v1.0 index (no hashes)
+        let entries1 = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 1000, mtime: "2024-01-01T00:00:00Z"),
+            IndexEntry(path: "2024/02/file2.jpg", size: 2000, mtime: "2024-01-02T00:00:00Z")
+        ]
+        let index1 = BaselineIndex(entries: entries1)
+        XCTAssertEqual(index1.version, "1.0")
+        
+        // Update with entry that has hash
+        let newEntries = [
+            IndexEntry(path: "2024/03/file3.jpg", size: 3000, mtime: "2024-01-03T00:00:00Z", hash: "sha256:abc123")
+        ]
+        let index2 = index1.updating(with: newEntries)
+        
+        // Should now be v1.1
+        XCTAssertEqual(index2.version, "1.1")
+    }
+    
+    func testUpdatingIndexVersionStays1_0WhenNoHashAdded() throws {
+        // Start with v1.0 index (no hashes)
+        let entries1 = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 1000, mtime: "2024-01-01T00:00:00Z"),
+            IndexEntry(path: "2024/02/file2.jpg", size: 2000, mtime: "2024-01-02T00:00:00Z")
+        ]
+        let index1 = BaselineIndex(entries: entries1)
+        XCTAssertEqual(index1.version, "1.0")
+        
+        // Update with entry without hash
+        let newEntries = [
+            IndexEntry(path: "2024/03/file3.jpg", size: 3000, mtime: "2024-01-03T00:00:00Z")
+        ]
+        let index2 = index1.updating(with: newEntries)
+        
+        // Should still be v1.0
+        XCTAssertEqual(index2.version, "1.0")
+    }
 }

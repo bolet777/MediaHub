@@ -68,6 +68,9 @@ public struct DetectionOrchestrator {
         let libraryPaths: Set<String>
         let indexState: IndexUsageState
         let indexMetadata: DetectionResult.IndexMetadata?
+        let libraryHashSet: Set<String>
+        let libraryHashToPath: [String: String]
+        let hashCoverage: Double?
         
         // Try to load baseline index (READ-ONLY: never creates or modifies index)
         indexState = BaselineIndexLoader.tryLoadBaselineIndex(libraryRoot: libraryRootURL.path)
@@ -81,6 +84,10 @@ public struct DetectionOrchestrator {
                 entryCount: index.entryCount,
                 lastUpdated: index.lastUpdated
             )
+            // Extract hash set and hash-to-path mapping for duplicate detection
+            libraryHashSet = index.hashSet
+            libraryHashToPath = index.hashToAnyPath
+            hashCoverage = index.hashCoverage
         case .absent, .invalid:
             // Fallback to full scan
             do {
@@ -89,6 +96,9 @@ public struct DetectionOrchestrator {
                 throw DetectionOrchestrationError.comparisonFailed(error)
             }
             indexMetadata = nil
+            libraryHashSet = Set()
+            libraryHashToPath = [:]
+            hashCoverage = nil
         }
         
         // Step 3.5: Query known items for this Source (import-detection integration)
@@ -106,32 +116,97 @@ public struct DetectionOrchestrator {
         // Combine Library paths and known items paths for comparison
         let allKnownPaths = libraryPaths.union(knownItemsPaths)
         
-        // Step 4: Compare candidates against Library contents and known items
+        // Step 4: Compare candidates against Library contents and known items (path-based)
         let comparisonResults = LibraryItemComparator.compareAll(
             candidates: sortedCandidates,
             against: allKnownPaths
         )
         
+        // Step 4.5: Compute content hashes for source candidates and detect duplicates by hash
+        let sourceRootURL = URL(fileURLWithPath: source.path)
+        var hashBasedDuplicates: [CandidateMediaItem: (hash: String, libraryPath: String)] = [:]
+        
+        for candidate in sortedCandidates {
+            // Only compute hash for candidates that are "new" by path (skip known-by-path)
+            let comparisonResult = comparisonResults[candidate] ?? .new
+            guard comparisonResult == .new else {
+                // Skip hash computation for path-based known items
+                continue
+            }
+            
+            // Compute content hash for source file
+            let candidateURL = URL(fileURLWithPath: candidate.path)
+            var contentHash: String? = nil
+            
+            do {
+                contentHash = try ContentHasher.computeHash(for: candidateURL, allowedRoot: sourceRootURL)
+            } catch {
+                // Hash computation failed - continue without hash (non-fatal)
+                // Candidate will be marked as "new" without hash-based duplicate detection
+                continue
+            }
+            
+            // Check if hash exists in library hash set
+            if let hash = contentHash, libraryHashSet.contains(hash) {
+                // Hash match found - duplicate detected
+                if let libraryPath = libraryHashToPath[hash] {
+                    hashBasedDuplicates[candidate] = (hash: hash, libraryPath: libraryPath)
+                }
+            }
+        }
+        
         // Step 5: Generate detection results with status and explanations
+        // Combine path-based and hash-based exclusions (union)
         var candidateResults: [CandidateItemResult] = []
         for candidate in sortedCandidates {
             let comparisonResult = comparisonResults[candidate] ?? .new
+            let isHashDuplicate = hashBasedDuplicates[candidate] != nil
+            
             let status: String
             let exclusionReason: ExclusionReason?
+            let duplicateOfHash: String?
+            let duplicateOfLibraryPath: String?
+            let duplicateReason: String?
             
-            switch comparisonResult {
-            case .new:
+            // Determine status: if path-based known OR hash-based duplicate, mark as "known"
+            // Note: "known" can mean two things:
+            // 1. Known by path (exclusionReason = .alreadyKnown, duplicateReason = nil)
+            // 2. Known by hash (exclusionReason = nil, duplicateReason = "content_hash")
+            // If both are true, prefer path-based (more specific)
+            if comparisonResult == .known || isHashDuplicate {
+                status = "known"
+                
+                // Prefer path-based exclusion reason if both exist (path-based is more specific)
+                if comparisonResult == .known {
+                    // Known by path: use exclusionReason, clear hash-based metadata
+                    exclusionReason = .alreadyKnown
+                    duplicateOfHash = nil
+                    duplicateOfLibraryPath = nil
+                    duplicateReason = nil
+                } else {
+                    // Known by hash only: use duplicateReason and hash metadata
+                    let hashInfo = hashBasedDuplicates[candidate]!
+                    exclusionReason = nil
+                    duplicateOfHash = hashInfo.hash
+                    duplicateOfLibraryPath = hashInfo.libraryPath
+                    duplicateReason = "content_hash"
+                }
+            } else {
+                // New item (neither path-based nor hash-based duplicate)
                 status = "new"
                 exclusionReason = nil
-            case .known:
-                status = "known"
-                exclusionReason = .alreadyKnown
+                duplicateOfHash = nil
+                duplicateOfLibraryPath = nil
+                duplicateReason = nil
             }
             
             candidateResults.append(CandidateItemResult(
                 item: candidate,
                 status: status,
-                exclusionReason: exclusionReason
+                exclusionReason: exclusionReason,
+                duplicateOfHash: duplicateOfHash,
+                duplicateOfLibraryPath: duplicateOfLibraryPath,
+                duplicateReason: duplicateReason
             ))
         }
         
@@ -153,7 +228,8 @@ public struct DetectionOrchestrator {
             summary: summary,
             indexUsed: indexState.isValid,
             indexFallbackReason: indexState.fallbackReason,
-            indexMetadata: indexMetadata
+            indexMetadata: indexMetadata,
+            hashCoverage: hashCoverage
         )
         
         // Step 6: Store detection result

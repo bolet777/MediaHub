@@ -20,10 +20,37 @@ public struct CandidateItemResult: Codable, Equatable {
     public let item: CandidateMediaItem
     
     /// Status: "new" or "known"
+    ///
+    /// - "new": Item is not in library (neither by path nor by content hash)
+    /// - "known": Item is already in library (by path OR by content hash)
+    ///
+    /// To determine why an item is "known":
+    /// - If `exclusionReason == .alreadyKnown`: Known by path (already in library at same path)
+    /// - If `duplicateReason == "content_hash"`: Known by content hash (duplicate content, different path)
     public let status: String
     
-    /// Exclusion reason if item was excluded (null if included)
+    /// Exclusion reason if item was excluded by path-based detection (null if included or excluded by hash)
+    ///
+    /// - `.alreadyKnown`: Item is already in library at the same path
+    /// - `nil`: Item is either "new" or excluded by hash-based duplicate detection
     public let exclusionReason: ExclusionReason?
+    
+    /// Content hash of the source file (if duplicate detected by hash)
+    ///
+    /// Non-nil only when `duplicateReason == "content_hash"`.
+    public let duplicateOfHash: String?
+    
+    /// Library path of duplicate (if found by hash)
+    ///
+    /// Non-nil only when `duplicateReason == "content_hash"`.
+    /// This is the path in the library where the duplicate content exists.
+    public let duplicateOfLibraryPath: String?
+    
+    /// Reason for duplicate detection: "content_hash" or nil
+    ///
+    /// - `"content_hash"`: Item is a duplicate detected by content hash matching
+    /// - `nil`: Item is either "new" or excluded by path-based detection
+    public let duplicateReason: String?
     
     /// Creates a new CandidateItemResult
     ///
@@ -31,14 +58,23 @@ public struct CandidateItemResult: Codable, Equatable {
     ///   - item: The candidate item
     ///   - status: Status string ("new" or "known")
     ///   - exclusionReason: Optional exclusion reason
+    ///   - duplicateOfHash: Content hash if duplicate found by hash
+    ///   - duplicateOfLibraryPath: Library path of duplicate if found by hash
+    ///   - duplicateReason: Reason for duplicate ("content_hash" or nil)
     public init(
         item: CandidateMediaItem,
         status: String,
-        exclusionReason: ExclusionReason? = nil
+        exclusionReason: ExclusionReason? = nil,
+        duplicateOfHash: String? = nil,
+        duplicateOfLibraryPath: String? = nil,
+        duplicateReason: String? = nil
     ) {
         self.item = item
         self.status = status
         self.exclusionReason = exclusionReason
+        self.duplicateOfHash = duplicateOfHash
+        self.duplicateOfLibraryPath = duplicateOfLibraryPath
+        self.duplicateReason = duplicateReason
     }
 }
 
@@ -99,6 +135,9 @@ public struct DetectionResult: Codable, Equatable {
     /// Index metadata (if index was used)
     public let indexMetadata: IndexMetadata?
     
+    /// Hash coverage from baseline index (0.0 to 1.0, nil if index not used)
+    public let hashCoverage: Double?
+    
     /// Index metadata structure
     public struct IndexMetadata: Codable, Equatable {
         /// Index version
@@ -122,6 +161,7 @@ public struct DetectionResult: Codable, Equatable {
     ///   - indexUsed: Whether baseline index was used
     ///   - indexFallbackReason: Fallback reason if index was not used
     ///   - indexMetadata: Index metadata if index was used
+    ///   - hashCoverage: Hash coverage from baseline index (nil if index not used)
     ///   - version: Format version (defaults to "1.0")
     public init(
         sourceId: String,
@@ -132,6 +172,7 @@ public struct DetectionResult: Codable, Equatable {
         indexUsed: Bool = false,
         indexFallbackReason: String? = nil,
         indexMetadata: IndexMetadata? = nil,
+        hashCoverage: Double? = nil,
         version: String = "1.0"
     ) {
         self.version = version
@@ -143,6 +184,7 @@ public struct DetectionResult: Codable, Equatable {
         self.indexUsed = indexUsed
         self.indexFallbackReason = indexFallbackReason
         self.indexMetadata = indexMetadata
+        self.hashCoverage = hashCoverage
     }
     
     /// Validates that the result structure is valid

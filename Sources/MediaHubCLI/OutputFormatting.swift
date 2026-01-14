@@ -148,7 +148,14 @@ struct DetectionResultFormatter: OutputFormatter {
         output += "Summary:\n"
         output += "  Total scanned: \(result.summary.totalScanned)\n"
         output += "  New items: \(result.summary.newItems)\n"
-        output += "  Known items: \(result.summary.knownItems)\n\n"
+        output += "  Known items: \(result.summary.knownItems)\n"
+        
+        // Display hash coverage if available
+        if let hashCoverage = result.hashCoverage {
+            let percentage = Int(hashCoverage * 100)
+            output += "  Hash coverage: \(percentage)%\n"
+        }
+        output += "\n"
         
         if result.summary.newItems > 0 {
             output += "New items:\n"
@@ -158,6 +165,36 @@ struct DetectionResultFormatter: OutputFormatter {
             }
             if newItems.count > 20 {
                 output += "  ... and \(newItems.count - 20) more\n"
+            }
+            output += "\n"
+        }
+        
+        // Display known items with duplicate information
+        if result.summary.knownItems > 0 {
+            output += "Known items:\n"
+            let knownItems = result.candidates.filter { $0.status == "known" }
+            for (index, candidate) in knownItems.prefix(20).enumerated() {
+                output += "  \(index + 1). \(candidate.item.path)\n"
+                
+                // Display duplicate information
+                if let duplicateReason = candidate.duplicateReason {
+                    // Hash-based duplicate
+                    output += "     Duplicate reason: \(duplicateReason)\n"
+                    if let hash = candidate.duplicateOfHash {
+                        // Shorten hash for display: show first 12 chars + "..."
+                        let shortHash = String(hash.prefix(12)) + "..."
+                        output += "     Hash: \(shortHash)\n"
+                    }
+                    if let libraryPath = candidate.duplicateOfLibraryPath {
+                        output += "     Duplicate of: \(libraryPath)\n"
+                    }
+                } else if candidate.exclusionReason != nil {
+                    // Path-based duplicate
+                    output += "     Duplicate reason: path_match\n"
+                }
+            }
+            if knownItems.count > 20 {
+                output += "  ... and \(knownItems.count - 20) more\n"
             }
         }
         

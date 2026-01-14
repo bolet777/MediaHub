@@ -132,6 +132,7 @@ public struct ImportExecutor {
                     do {
                         // Build absolute destination path
                         let absoluteDestinationPath = libraryRootURL.appendingPathComponent(destinationPath).path
+                        let destinationURL = URL(fileURLWithPath: absoluteDestinationPath)
                         
                         // Get file attributes (size, mtime)
                         let attributes = try fileOperations.attributesOfItem(atPath: absoluteDestinationPath)
@@ -147,8 +148,19 @@ public struct ImportExecutor {
                         // Convert modification date to ISO8601 string
                         let mtime = ISO8601DateFormatter().string(from: modificationDate)
                         
-                        // Create index entry
-                        let entry = IndexEntry(path: normalizedPath, size: size, mtime: mtime)
+                        // Compute content hash for imported destination file
+                        // Hash computation is non-fatal: if it fails, continue without hash
+                        var contentHash: String? = nil
+                        do {
+                            contentHash = try ContentHasher.computeHash(for: destinationURL, allowedRoot: libraryRootURL)
+                        } catch {
+                            // Hash computation failed - continue without hash (non-fatal)
+                            // Warning will be included in import result if needed
+                            // For now, we silently continue (hash is optional)
+                        }
+                        
+                        // Create index entry with hash (if computed successfully)
+                        let entry = IndexEntry(path: normalizedPath, size: size, mtime: mtime, hash: contentHash)
                         newIndexEntries.append(entry)
                     } catch {
                         // Skip if we can't create entry (non-fatal)
