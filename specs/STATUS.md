@@ -3,6 +3,7 @@
 **Document Type**: Project Status & Roadmap Tracking  
 **Purpose**: Memory of project state, decisions, and planned slices  
 **Last Updated**: 2026-01-27  
+**Next Review**: After Slice 7 or after real-world usage  
 **Note**: This is a tracking document, not a normative specification. For authoritative specs, see individual slice specifications in `specs/`.
 
 ---
@@ -72,60 +73,53 @@
 - Safety-first error handling and interruption handling
 - JSON output support for dry-run mode
 
+### ✅ Slice 6 — Library Adoption
+**Status**: Complete and validated  
+**Spec**: `specs/006-library-adoption/spec.md`  
+**Validation**: `specs/006-library-adoption/VALIDATION_RUNBOOK.md`
+
+**Deliverables**:
+- `library adopt <path> [--dry-run] [--yes]` command
+- Adoption of existing library directories organized in YYYY/MM without modifying media files
+- Baseline scan of existing media files to establish "known items" for future detection
+- Dry-run preview mode for adoption operations
+- Explicit confirmation prompts (with `--yes` bypass for scripting)
+- Idempotent adoption (safe re-runs on already adopted libraries)
+- Integration with existing `detect` and `import` commands for incremental imports
+
 ---
 
 ## Planned Slices
 
-### 🔲 Slice 6 — Library Adoption
-**Status**: Planned (not yet implemented)  
-**Analysis**: `specs/archive/RAPPORT_ADOPTION_LIBRAIRIE.md`
-
-**Objective**: Enable adoption of an existing media library (e.g., `/Volumes/Photos/Photos/Librairie_Amateur` organized in YYYY/MM) as a MediaHub library without modifying existing media files.
-
-**Key Requirements** (from analysis report):
-- Create `.mediahub/library.json` in an existing library directory
-- No modification of existing media files (no-touch guarantee)
-- Support dry-run mode for preview
-- Explicit confirmation before adoption
-- Baseline scan of existing files (via existing `LibraryContentQuery`)
-
-**Proposed Command**: `mediahub library adopt <path> [--dry-run]`
-
-**Architectural Compatibility**: ✅ Confirmed compatible
-- Core architecture supports adoption (structure minimum is permissive)
-- `LibraryContentQuery` already scans all existing media files
-- Import system is idempotent and handles collisions safely
-- Safety features (dry-run, confirmation) are compatible
-
-**Gap Identified**: No explicit command/API for adopting a "virgin" library (non-legacy, just organized in YYYY/MM). `LegacyLibraryAdopter` only detects specific legacy patterns (MediaVault).
-
-**Decision** (from analysis report): Implement `library adopt` command as minimal addition, reusing existing architecture without core changes.
-
 ### 🔲 Slice 7 — Baseline Index
 **Status**: Planned (future)
 
-**Objective**: Performance optimization for large libraries by creating a baseline index of existing media files.
+**Objective**: Performance optimization for very large libraries by creating a persistent baseline index of existing media files.
 
 **Proposed Features**:
 - Create `.mediahub/registry/index.json` with baseline file list
-- Optional hash/checksum for future deduplication
+- Index structure prepared for future hash storage (Slice 8)
 - Incremental index updates (on import, not full re-scan)
-- Faster detection runs for large libraries
+- Faster detection runs for large libraries (10,000+ files)
 
-**Note**: For P1, `LibraryContentQuery.scanLibraryContents()` is sufficient. Index is a performance optimization for P2.
+**Note**: This is a performance optimization, not a functional prerequisite. Current `LibraryContentQuery.scanLibraryContents()` is sufficient for typical library sizes. Slice 7 improves `detect` and `import` performance for very large libraries. Slice 7 does NOT perform content hashing (hashing is reserved for Slice 8).
+
+**Dependency**: Builds on Slice 6 (adoption baseline scan). Slice 7 adds persistent indexing to avoid full re-scans.
 
 ### 🔲 Slice 8 — Advanced Hashing & Deduplication
 **Status**: Planned (future)
 
-**Objective**: Cross-source deduplication using content hashing (SHA-256 or similar).
+**Objective**: Cross-source deduplication using content hashing (SHA-256 or similar) to identify duplicate media files across different sources.
 
 **Proposed Features**:
 - Content-based file identification (hash/checksum)
 - Cross-source duplicate detection
-- Global deduplication (beyond path-based known-items)
-- Optional hash storage in baseline index
+- Global deduplication (beyond path-based known-items tracking)
+- Optional hash storage in baseline index (complements Slice 7)
 
-**Note**: Currently, known-items tracking is path-based and source-scoped. Hashing enables content-based deduplication across sources.
+**Note**: Currently, known-items tracking is path-based and source-scoped. Hashing enables content-based deduplication across sources, detecting duplicates even when files have different paths or names.
+
+**Dependency**: Can leverage Slice 7 baseline index for hash storage, but is independent in functionality. Slice 8 improves deduplication capabilities beyond current path-based detection.
 
 ---
 
@@ -148,18 +142,23 @@
 
 ### Library Adoption Status
 
-**Current State**: Not yet implemented
+**Current State**: Implemented (Slice 6)
 
 **What Works Today**:
+- `library adopt <path> [--dry-run] [--yes]` command for adopting existing library directories
+- Adoption creates only `.mediahub/` metadata without modifying existing media files
+- Baseline scan of existing media files establishes "known items" for future detection
+- Dry-run preview mode for adoption operations
+- Explicit confirmation prompts (with `--yes` bypass for scripting)
+- Idempotent adoption (safe re-runs on already adopted libraries)
 - Opening existing MediaHub libraries (with `.mediahub/library.json`)
 - Legacy library adoption (MediaVault pattern detection)
 - Importing into libraries that already contain media files (collision handling)
+- Incremental imports: after adoption, `detect` and `import` commands work normally and only add new items
 
-**What's Missing**:
-- Explicit command to adopt a "virgin" library (existing YYYY/MM structure without MediaHub metadata)
-- Workflow to bootstrap `.mediahub/` in an existing library
-
-**Planned Solution**: Slice 6 — `library adopt` command
+**What's Next**:
+- Slice 7: Performance optimization with baseline index for very large libraries
+- Slice 8: Advanced hashing and cross-source deduplication
 
 ---
 
@@ -168,18 +167,18 @@
 ### Library Adoption Analysis (2026-01-27)
 **Document**: `specs/archive/RAPPORT_ADOPTION_LIBRAIRIE.md`
 
-**Key Findings**:
+**Key Findings** (historical reference):
 - ✅ Core architecture is compatible with library adoption
 - ✅ `LibraryContentQuery` scans all existing media files (baseline works)
 - ✅ Import system is idempotent and safe (handles existing files correctly)
-- ⚠️ Gap: No explicit command for adopting non-legacy libraries
-- ✅ Recommendation: Minimal addition (`library adopt` command) without core changes
+- ✅ Gap resolved: `library adopt` command implemented in Slice 6
+- ✅ Implementation: Minimal addition approach without core changes
 
-**Decision**: Proceed with Slice 6 implementation using minimal addition approach.
+**Status**: Analysis completed and implementation delivered in Slice 6.
 
 ---
 
-## Out of Scope (As of Slice 5)
+## Out of Scope (Current)
 
 - Photos.app or device-specific integrations
 - User interface / media browsing
@@ -187,7 +186,6 @@
 - Metadata enrichment (tags, faces, albums)
 - Pipelines, automation, or scheduling
 - Cloud sync or backup features
-- Library adoption (planned for Slice 6)
 
 ---
 
@@ -201,4 +199,4 @@
 ---
 
 **Last Updated**: 2026-01-27  
-**Next Review**: After Slice 6 implementation
+**Next Review**: After Slice 7 or after real-world usage
