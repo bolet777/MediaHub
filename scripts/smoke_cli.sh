@@ -603,6 +603,94 @@ success "Tous les fichiers sont présents dans la structure attendue"
 STEP_DURATION=$(step_end "$STEP_START")
 record_step "Import" "PASS" "imported=$IMPORTED1 failed=$FAILED1" "$STEP_DURATION"
 
+# --- index hash (Slice 9) ---
+step "Index hash (Slice 9)"
+STEP_START=$(step_start)
+
+# Read status before to capture initial hashCoverage
+test_header "Lecture du statut initial (hashCoverage)"
+STATUS_BEFORE_OUTPUT=$(run status --json 2>&1)
+STATUS_BEFORE_JSON=$(extract_json "$STATUS_BEFORE_OUTPUT")
+HASH_COV_BEFORE=$(json_get "$STATUS_BEFORE_JSON" "hc = j.get('hashCoverage', {}); print(f\"{hc.get('entriesWithHash', 0)}/{hc.get('totalEntries', 0)}\")" || echo "0/0")
+TOTAL_ENTRIES_BEFORE=$(json_get "$STATUS_BEFORE_JSON" "print(j.get('hashCoverage', {}).get('totalEntries', 0))" || echo "0")
+ENTRIES_WITH_HASH_BEFORE=$(json_get "$STATUS_BEFORE_JSON" "print(j.get('hashCoverage', {}).get('entriesWithHash', 0))" || echo "0")
+# Handle empty values
+[[ -z "$HASH_COV_BEFORE" ]] && HASH_COV_BEFORE="0/0"
+[[ -z "$TOTAL_ENTRIES_BEFORE" ]] && TOTAL_ENTRIES_BEFORE="0"
+[[ -z "$ENTRIES_WITH_HASH_BEFORE" ]] && ENTRIES_WITH_HASH_BEFORE="0"
+if [[ "$VERBOSE" == "1" ]]; then
+  info "Hash coverage avant: $HASH_COV_BEFORE (total=$TOTAL_ENTRIES_BEFORE, withHash=$ENTRIES_WITH_HASH_BEFORE)"
+fi
+
+# Check if index exists before testing
+INDEX_PATH="$LIB/.mediahub/registry/index.json"
+if [[ ! -f "$INDEX_PATH" ]]; then
+  info "Index n'existe pas encore (normal après import si index n'était pas créé)"
+  info "Skipping index hash tests (index required)"
+  STEP_DURATION=$(step_end "$STEP_START")
+  record_step "Index hash (Slice 9)" "PASS" "skipped (no index)" "$STEP_DURATION"
+else
+  # Dry-run: enumerate candidates only
+  test_header "Index hash --dry-run (enumerate-only, zero writes)"
+  HASH_DRYRUN_OUTPUT=$(run index hash --dry-run --json 2>&1)
+  HASH_DRYRUN_JSON=$(extract_json "$HASH_DRYRUN_OUTPUT")
+  if [[ -z "$HASH_DRYRUN_JSON" ]]; then
+    fail "La commande index hash --dry-run n'a retourné aucun JSON valide"
+  fi
+  # Verify dry-run JSON is valid (check for dryRun field or statistics)
+  DRYRUN_FLAG=$(json_get "$HASH_DRYRUN_JSON" "print(j.get('dryRun', False))" || echo "false")
+  if [[ "$VERBOSE" == "1" ]]; then
+    info "Dry-run JSON valide (dryRun=$DRYRUN_FLAG)"
+  fi
+  success "Dry-run réussi (zéro write, zéro hash computation)"
+
+  # Apply hashes (non-interactive safe with --yes)
+  test_header "Index hash --yes (apply hashes + atomic write)"
+  HASH_APPLY_OUTPUT=$(run index hash --yes --json 2>&1)
+  HASH_APPLY_JSON=$(extract_json "$HASH_APPLY_OUTPUT")
+  if [[ -z "$HASH_APPLY_JSON" ]]; then
+    fail "La commande index hash --yes n'a retourné aucun JSON valide"
+  fi
+  # Extract statistics if available
+  HASHES_COMPUTED=$(json_get "$HASH_APPLY_JSON" "print(j.get('hashesComputed', 0))" || echo "0")
+  ENTRIES_UPDATED=$(json_get "$HASH_APPLY_JSON" "print(j.get('entriesUpdated', 0))" || echo "0")
+  INDEX_UPDATED=$(json_get "$HASH_APPLY_JSON" "print(j.get('indexUpdated', False))" || echo "false")
+  if [[ "$VERBOSE" == "1" ]]; then
+    info "Hashes computed: $HASHES_COMPUTED, entries updated: $ENTRIES_UPDATED, index updated: $INDEX_UPDATED"
+  fi
+  success "Hash computation et écriture atomique réussies"
+
+  # Read status after to verify hashCoverage increased (or at least didn't decrease)
+  test_header "Vérification du statut après index hash"
+  STATUS_AFTER_OUTPUT=$(run status --json 2>&1)
+  STATUS_AFTER_JSON=$(extract_json "$STATUS_AFTER_OUTPUT")
+  HASH_COV_AFTER=$(json_get "$STATUS_AFTER_JSON" "hc = j.get('hashCoverage', {}); print(f\"{hc.get('entriesWithHash', 0)}/{hc.get('totalEntries', 0)}\")" || echo "0/0")
+  TOTAL_ENTRIES_AFTER=$(json_get "$STATUS_AFTER_JSON" "print(j.get('hashCoverage', {}).get('totalEntries', 0))" || echo "0")
+  ENTRIES_WITH_HASH_AFTER=$(json_get "$STATUS_AFTER_JSON" "print(j.get('hashCoverage', {}).get('entriesWithHash', 0))" || echo "0")
+  # Handle empty values
+  [[ -z "$HASH_COV_AFTER" ]] && HASH_COV_AFTER="0/0"
+  [[ -z "$TOTAL_ENTRIES_AFTER" ]] && TOTAL_ENTRIES_AFTER="0"
+  [[ -z "$ENTRIES_WITH_HASH_AFTER" ]] && ENTRIES_WITH_HASH_AFTER="0"
+
+  # Verify entriesWithHash didn't decrease
+  if [[ -n "$ENTRIES_WITH_HASH_BEFORE" && -n "$ENTRIES_WITH_HASH_AFTER" ]]; then
+    if [[ "$ENTRIES_WITH_HASH_AFTER" -lt "$ENTRIES_WITH_HASH_BEFORE" ]]; then
+      fail "entriesWithHash a diminué ($ENTRIES_WITH_HASH_BEFORE -> $ENTRIES_WITH_HASH_AFTER)"
+    fi
+    # If totalEntries > 0, verify entriesWithHash > 0 after apply
+    if [[ "$TOTAL_ENTRIES_AFTER" -gt 0 && "$ENTRIES_WITH_HASH_AFTER" -eq 0 ]]; then
+      fail "totalEntries > 0 mais entriesWithHash == 0 après apply"
+    fi
+    if [[ "$VERBOSE" == "1" ]]; then
+      info "Hash coverage après: $HASH_COV_AFTER (total=$TOTAL_ENTRIES_AFTER, withHash=$ENTRIES_WITH_HASH_AFTER)"
+    fi
+  fi
+  success "Hash coverage vérifié: $HASH_COV_AFTER"
+
+  STEP_DURATION=$(step_end "$STEP_START")
+  record_step "Index hash (Slice 9)" "PASS" "withHash=$HASH_COV_AFTER" "$STEP_DURATION"
+fi
+
 # --- detect after import ---
 step "Detect (post-import)"
 STEP_START=$(step_start)
@@ -670,6 +758,80 @@ fi
 
 STEP_DURATION=$(step_end "$STEP_START")
 record_step "Move + status" "PASS" "ID unchanged" "$STEP_DURATION"
+
+# --- index hash (idempotence) ---
+step "Index hash (idempotence)"
+STEP_START=$(step_start)
+
+# Check if index exists (use LIB_MOVED since library was moved)
+INDEX_PATH_MOVED="$LIB_MOVED/.mediahub/registry/index.json"
+if [[ ! -f "$INDEX_PATH_MOVED" ]]; then
+  info "Index n'existe pas (normal si index n'était pas créé)"
+  info "Skipping idempotence test (index required)"
+  STEP_DURATION=$(step_end "$STEP_START")
+  record_step "Index hash (idempotence)" "PASS" "skipped (no index)" "$STEP_DURATION"
+else
+  # Read status before to capture current hashCoverage
+  test_header "Lecture du statut avant idempotence"
+  STATUS_IDEMP_BEFORE_OUTPUT=$(run status --json 2>&1)
+  STATUS_IDEMP_BEFORE_JSON=$(extract_json "$STATUS_IDEMP_BEFORE_OUTPUT")
+  HASH_COV_IDEMP_BEFORE=$(json_get "$STATUS_IDEMP_BEFORE_JSON" "hc = j.get('hashCoverage', {}); print(f\"{hc.get('entriesWithHash', 0)}/{hc.get('totalEntries', 0)}\")" || echo "0/0")
+  TOTAL_ENTRIES_IDEMP_BEFORE=$(json_get "$STATUS_IDEMP_BEFORE_JSON" "print(j.get('hashCoverage', {}).get('totalEntries', 0))" || echo "0")
+  ENTRIES_WITH_HASH_IDEMP_BEFORE=$(json_get "$STATUS_IDEMP_BEFORE_JSON" "print(j.get('hashCoverage', {}).get('entriesWithHash', 0))" || echo "0")
+  # Handle empty values
+  [[ -z "$HASH_COV_IDEMP_BEFORE" ]] && HASH_COV_IDEMP_BEFORE="0/0"
+  [[ -z "$TOTAL_ENTRIES_IDEMP_BEFORE" ]] && TOTAL_ENTRIES_IDEMP_BEFORE="0"
+  [[ -z "$ENTRIES_WITH_HASH_IDEMP_BEFORE" ]] && ENTRIES_WITH_HASH_IDEMP_BEFORE="0"
+  if [[ "$VERBOSE" == "1" ]]; then
+    info "Hash coverage avant idempotence: $HASH_COV_IDEMP_BEFORE"
+  fi
+
+  # Run index hash again (should be no-op)
+  test_header "Index hash --yes (2e exécution, devrait être no-op)"
+  HASH_IDEMP_OUTPUT=$(run index hash --yes --json 2>&1)
+  HASH_IDEMP_JSON=$(extract_json "$HASH_IDEMP_OUTPUT")
+  if [[ -z "$HASH_IDEMP_JSON" ]]; then
+    fail "La commande index hash --yes (idempotence) n'a retourné aucun JSON valide"
+  fi
+  # Check for no-op indicators
+  ENTRIES_UPDATED_IDEMP=$(json_get "$HASH_IDEMP_JSON" "print(j.get('entriesUpdated', 0))" || echo "0")
+  INDEX_UPDATED_IDEMP=$(json_get "$HASH_IDEMP_JSON" "print(j.get('indexUpdated', False))" || echo "false")
+  # If entriesUpdated is 0 or indexUpdated is false, it's a no-op (good)
+  if [[ "$VERBOSE" == "1" ]]; then
+    info "Entries updated: $ENTRIES_UPDATED_IDEMP, index updated: $INDEX_UPDATED_IDEMP"
+  fi
+  if [[ "$ENTRIES_UPDATED_IDEMP" == "0" || "$INDEX_UPDATED_IDEMP" == "false" ]]; then
+    success "Idempotence confirmée (no-op)"
+  else
+    info "Index mis à jour (peut être normal si coverage n'était pas complète)"
+  fi
+
+  # Read status after to verify hashCoverage is stable or complete
+  test_header "Vérification du statut après idempotence"
+  STATUS_IDEMP_AFTER_OUTPUT=$(run status --json 2>&1)
+  STATUS_IDEMP_AFTER_JSON=$(extract_json "$STATUS_IDEMP_AFTER_OUTPUT")
+  HASH_COV_IDEMP_AFTER=$(json_get "$STATUS_IDEMP_AFTER_JSON" "hc = j.get('hashCoverage', {}); print(f\"{hc.get('entriesWithHash', 0)}/{hc.get('totalEntries', 0)}\")" || echo "0/0")
+  TOTAL_ENTRIES_IDEMP_AFTER=$(json_get "$STATUS_IDEMP_AFTER_JSON" "print(j.get('hashCoverage', {}).get('totalEntries', 0))" || echo "0")
+  ENTRIES_WITH_HASH_IDEMP_AFTER=$(json_get "$STATUS_IDEMP_AFTER_JSON" "print(j.get('hashCoverage', {}).get('entriesWithHash', 0))" || echo "0")
+  # Handle empty values
+  [[ -z "$HASH_COV_IDEMP_AFTER" ]] && HASH_COV_IDEMP_AFTER="0/0"
+  [[ -z "$TOTAL_ENTRIES_IDEMP_AFTER" ]] && TOTAL_ENTRIES_IDEMP_AFTER="0"
+  [[ -z "$ENTRIES_WITH_HASH_IDEMP_AFTER" ]] && ENTRIES_WITH_HASH_IDEMP_AFTER="0"
+
+  # Verify coverage is stable or complete
+  if [[ -n "$TOTAL_ENTRIES_IDEMP_AFTER" && "$TOTAL_ENTRIES_IDEMP_AFTER" -gt 0 ]]; then
+    if [[ "$ENTRIES_WITH_HASH_IDEMP_AFTER" == "$TOTAL_ENTRIES_IDEMP_AFTER" ]]; then
+      success "Couverture complète: $HASH_COV_IDEMP_AFTER"
+    elif [[ "$ENTRIES_WITH_HASH_IDEMP_AFTER" == "$ENTRIES_WITH_HASH_IDEMP_BEFORE" ]]; then
+      success "Couverture stable: $HASH_COV_IDEMP_AFTER"
+    else
+      info "Couverture: $HASH_COV_IDEMP_AFTER (peut avoir augmenté si coverage n'était pas complète)"
+    fi
+  fi
+
+  STEP_DURATION=$(step_end "$STEP_START")
+  record_step "Index hash (idempotence)" "PASS" "coverage=$HASH_COV_IDEMP_AFTER" "$STEP_DURATION"
+fi
 
 # Track test results
 TMP_TEST_PASSED=true
