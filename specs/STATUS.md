@@ -2,8 +2,8 @@
 
 **Document Type**: Project Status & Roadmap Tracking  
 **Purpose**: Memory of project state, decisions, and planned slices  
-**Last Updated**: 2026-01-14  
-**Next Review**: After Slice 7 or after real-world usage  
+**Last Updated**: 2026-01-27  
+**Next Review**: After Slice 9 or after real-world usage  
 **Note**: This is a tracking document, not a normative specification. For authoritative specs, see individual slice specifications in `specs/`.
 
 ---
@@ -128,15 +128,40 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 - CLI output: Human-readable and JSON output include duplicate metadata (hash, library path, reason) and hash coverage statistics
 - Cross-source duplicate detection: Detects duplicates even when files have different paths or names
 
+### ✅ Slice 9 — Hash Coverage & Maintenance
+**Status**: Complete and validated (2026-01-27)  
+**Spec**: `specs/009-hash-coverage-maintenance/spec.md`  
+**Validation**: `specs/009-hash-coverage-maintenance/validation.md`
+
+**Deliverables**:
+- `mediahub index hash [--dry-run] [--limit N] [--yes] [--json]` command
+- Index-driven candidate selection: Loads baseline index and selects entries missing hash values
+- SHA-256 hash computation for existing library media files (using existing `ContentHasher` from Slice 8)
+- Atomic index updates: Updates baseline index with computed hashes using write-then-rename pattern
+- Dry-run mode: Enumerates candidates and statistics only; zero hash computation, zero writes
+- Explicit confirmation for non-dry-run operations (or `--yes` flag for non-interactive execution)
+- Deterministic and idempotent behavior: Same library state produces same results; existing hashes never overwritten
+- `--limit` support: Process first N candidates in deterministic order for incremental operation
+- Status command integration: Hash coverage statistics reporting (human-readable and JSON)
+- Backward compatible: Works with v1.0 indexes (no hashes) and v1.1 indexes (partial hashes)
+
 ---
 
 ## Planned Slices
 
 | Slice | Title | Goal | Pillar | Depends on | Track | Status |
 |-------|-------|------|--------|------------|-------|--------|
-| 9 | Hash Coverage & Maintenance | Enable users to compute and maintain hash coverage for existing libraries via `index hash` command, with status integration showing hash coverage statistics | Content Integrity & Deduplication | Slice 8 | Core / CLI | Proposed |
 | 9b | Duplicate Reporting & Audit | Provide comprehensive duplicate reporting and audit capabilities to help users understand duplicate content across sources and libraries | Content Integrity & Deduplication | Slice 8, Slice 9 | Core / CLI | Proposed |
 | 9c | Performance & Scale Guardrails | Establish performance benchmarks, scale testing, and guardrails to ensure MediaHub maintains acceptable performance as libraries grow | Scalability & Performance | Slice 8 | Core / CLI | Proposed |
+| 10 | Source Media Types + Library Statistics | Add source media type filtering (images/videos/both) and library statistics (total, by year, by type) via BaselineIndex | User Experience & Safety | Slice 7, Slice 9 | Core / CLI | Proposed |
+| 11 | UI Shell v1 + Library Discovery | Basic SwiftUI app with home screen, sidebar libraries, and library discovery/selection | User Experience & Safety | Slice 1 | UI | Proposed |
+| 12 | UI Create / Adopt Wizard v1 | Unified wizard for library creation and adoption with preview dry-run and explicit confirmation | User Experience & Safety | Slice 1, Slice 6 | UI | Proposed |
+| 13 | UI Sources + Detect + Import (P1) | Source management (attach/detach with media types), detect preview/run, and import preview/confirm/run workflows | User Experience & Safety | Slice 2, Slice 3, Slice 10 | UI | Proposed |
+| 14 | Progress + Cancel API minimale | Add progress reporting and cancellation support to core operations (detect, import, hash) | Reliability & Maintainability | None | Core / CLI | Proposed |
+| 15 | UI Operations UX (progress / cancel) | Progress bars, step indicators, and cancellation UI for detect/import/hash operations | User Experience & Safety | Slice 14 | UI | Proposed |
+| 16 | UI Hash Maintenance + Coverage | Hash maintenance UI (batch/limit operations) and coverage insights with duplicate detection (read-only) | User Experience & Safety | Slice 9, Slice 14 | UI | Proposed |
+| 17 | History / Audit UX + Export Center | Operation timeline (detect/import/maintenance), run details, and export capabilities (JSON/CSV/TXT) | User Experience & Safety, Transparency & Interoperability | Slice 14, Slice 9b | UI | Proposed |
+| 18 | macOS Permissions + Distribution Hardening | Sandbox strategy, notarization, security-scoped bookmarks, and distribution hardening | Reliability & Maintainability | Slice 11+ | UI / Core | Proposed |
 
 ### Desktop App Track (Macro)
 
@@ -222,5 +247,5 @@ functionally complete and stable.
 
 ---
 
-**Last Updated**: 2026-01-14  
+**Last Updated**: 2026-01-27  
 **Next Review**: After real-world usage or next planned slice

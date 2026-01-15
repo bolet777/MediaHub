@@ -3,6 +3,10 @@
 **Date**: 2026-01-27  
 **Version**: Première itération (brainstorm)  
 **Plateforme**: macOS avec SwiftUI
+---
+
+⚠️ Brainstorm visuel — non contractuel.
+La source de vérité est UI_VISION.md + IA_MAP_V1.md + CLI_UI_MAPPING.md
 
 ---
 
