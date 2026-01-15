@@ -23,6 +23,12 @@ This validation runbook provides step-by-step instructions for validating the So
   - Baseline index: `.mediahub/registry/index.json`
   - If paths differ in your implementation, adjust commands accordingly.
 
+**Known Adaptations from Repo CLI**:
+- **`detect` command**: Requires `<source-id>` argument. Use `mediahub source list --json --library <path>` to obtain source IDs before running detection.
+- **`import` command**: Requires `<source-id>` argument. Use `mediahub source list --json --library <path>` to obtain source IDs before running import.
+- **`library create` command**: Does not support `--yes` flag. The command is non-interactive by default when the target directory is empty. If the directory is not empty, the command will prompt for confirmation (interactive mode).
+- **BaselineIndex creation**: The `library adopt` command creates a BaselineIndex from existing files. For VAL-5 (statistics validation), ensure the BaselineIndex is actually present after adoption before running status commands.
+
 ---
 
 ## Preconditions / Test Fixtures
@@ -153,14 +159,18 @@ This validation runbook provides step-by-step instructions for validating the So
 
 3. **Run detection and verify only images detected**:
    ```bash
-   swift run mediahub detect --library /tmp/test_lib_scenario1
+   # First, obtain the source ID
+   SOURCE_ID=$(swift run mediahub source list --json --library /tmp/test_lib_scenario1 2>&1 | grep -v "Building\|Build of\|Planning" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0]['sourceId'])" 2>/dev/null)
+   # Then run detection with the source ID
+   swift run mediahub detect $SOURCE_ID --library /tmp/test_lib_scenario1
    ```
    - **Expected**: Detection results show only image files (no video files)
    - **Expected**: Detection count matches number of image files in source
 
 4. **Run import and verify only images imported**:
    ```bash
-   swift run mediahub import --all --yes --library /tmp/test_lib_scenario1
+   # Use the same source ID from step 3
+   swift run mediahub import $SOURCE_ID --all --yes --library /tmp/test_lib_scenario1
    ```
    - **Expected**: Import succeeds
    - **Expected**: Only image files imported to library (verify library contains only image files)
@@ -202,13 +212,17 @@ This validation runbook provides step-by-step instructions for validating the So
 
 3. **Run detection and verify only videos detected**:
    ```bash
-   swift run mediahub detect --library /tmp/test_lib_scenario2
+   # First, obtain the source ID
+   SOURCE_ID=$(swift run mediahub source list --json --library /tmp/test_lib_scenario2 2>&1 | grep -v "Building\|Build of\|Planning" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0]['sourceId'])" 2>/dev/null)
+   # Then run detection with the source ID
+   swift run mediahub detect $SOURCE_ID --library /tmp/test_lib_scenario2
    ```
    - **Expected**: Detection results show only video files (no image files)
 
 4. **Run import and verify only videos imported**:
    ```bash
-   swift run mediahub import --all --yes --library /tmp/test_lib_scenario2
+   # Use the same source ID from step 3
+   swift run mediahub import $SOURCE_ID --all --yes --library /tmp/test_lib_scenario2
    ```
    - **Expected**: Only video files imported to library
 
@@ -249,13 +263,17 @@ This validation runbook provides step-by-step instructions for validating the So
 
 3. **Run detection and verify both types detected**:
    ```bash
-   swift run mediahub detect --library /tmp/test_lib_scenario3
+   # First, obtain the source ID
+   SOURCE_ID=$(swift run mediahub source list --json --library /tmp/test_lib_scenario3 2>&1 | grep -v "Building\|Build of\|Planning" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0]['sourceId'])" 2>/dev/null)
+   # Then run detection with the source ID
+   swift run mediahub detect $SOURCE_ID --library /tmp/test_lib_scenario3
    ```
    - **Expected**: Detection results show both image and video files
 
 4. **Run import and verify both types imported**:
    ```bash
-   swift run mediahub import --all --yes --library /tmp/test_lib_scenario3
+   # Use the same source ID from step 3
+   swift run mediahub import $SOURCE_ID --all --yes --library /tmp/test_lib_scenario3
    ```
    - **Expected**: Both image and video files imported to library
 
@@ -288,7 +306,10 @@ This validation runbook provides step-by-step instructions for validating the So
 2. **Run detection with existing source**:
    ```bash
    cd /Volumes/Photos/_DevTools/MediaHub
-   swift run mediahub detect --library /tmp/test_lib_existing_source
+   # First, obtain the source ID
+   SOURCE_ID=$(swift run mediahub source list --json --library /tmp/test_lib_existing_source 2>&1 | grep -v "Building\|Build of\|Planning" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0]['sourceId'])" 2>/dev/null)
+   # Then run detection with the source ID
+   swift run mediahub detect $SOURCE_ID --library /tmp/test_lib_existing_source
    ```
    - **Expected**: Command succeeds (exit code 0, no error)
    - **Expected**: Source loads successfully
@@ -313,6 +334,7 @@ This validation runbook provides step-by-step instructions for validating the So
 
 **Preconditions**:
 - Test library `/tmp/test_lib_with_index` exists with BaselineIndex containing entries
+- **Important**: For manual validation, ensure BaselineIndex is actually present after `library adopt`. Verify the file exists: `.mediahub/registry/index.json`. If the index is not created, this validation step will show "Statistics: N/A" (which is expected behavior when index is missing). Automated tests (`StatusCommandTests.testStatusWithStatisticsWhenIndexAvailable`) validate this scenario with a valid BaselineIndex.
 
 **Steps**:
 
@@ -587,7 +609,9 @@ This validation runbook provides step-by-step instructions for validating the So
    ```bash
    cd /Volumes/Photos/_DevTools/MediaHub
    swift run mediahub source attach /tmp/test_source_mixed --media-types images --library /tmp/test_lib_scenario1
-   swift run mediahub detect --library /tmp/test_lib_scenario1
+   # Obtain source ID and run detection
+   SOURCE_ID=$(swift run mediahub source list --json --library /tmp/test_lib_scenario1 2>&1 | grep -v "Building\|Build of\|Planning" | python3 -c "import sys, json; data=json.load(sys.stdin); print([s for s in data if s['path'] == '/tmp/test_source_mixed'][0]['sourceId'])" 2>/dev/null)
+   swift run mediahub detect $SOURCE_ID --library /tmp/test_lib_scenario1
    ```
    - **Expected**: Only image files detected (uses same extension sets as existing classification)
 
@@ -690,7 +714,9 @@ swift run mediahub status --json --library /tmp/test_lib_with_index | python3 -m
 cd /Volumes/Photos/_DevTools/MediaHub
 swift run mediahub library create /tmp/test_lib_unknown
 swift run mediahub source attach /tmp/test_source_unknown --library /tmp/test_lib_unknown
-swift run mediahub detect --library /tmp/test_lib_unknown
+# Obtain source ID and run detection
+SOURCE_ID=$(swift run mediahub source list --json --library /tmp/test_lib_unknown 2>&1 | grep -v "Building\|Build of\|Planning" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0]['sourceId'])" 2>/dev/null)
+swift run mediahub detect $SOURCE_ID --library /tmp/test_lib_unknown
 ```
 - **Expected**: Unknown extensions excluded from processing (consistent with existing behavior)
 - **Expected**: Unknown extensions excluded from statistics `byMediaType` but counted in total (per spec)

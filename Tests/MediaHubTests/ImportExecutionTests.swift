@@ -736,4 +736,55 @@ final class ImportExecutionTests: XCTestCase {
         XCTAssertEqual(preservedIndex.lastUpdated, originalLastUpdated, "Index lastUpdated should not change in dry-run")
         XCTAssertEqual(preservedIndex.entryCount, existingIndex.entryCount, "Index entry count should not change in dry-run")
     }
+    
+    // MARK: - Media Type Filtering Tests
+    
+    func testImportRespectsFilteredDetectionResults() throws {
+        // Create source with both images and videos
+        let imageFile = sourceRootURL.appendingPathComponent("test.jpg")
+        try "fake image".write(to: imageFile, atomically: true, encoding: .utf8)
+        
+        let videoFile = sourceRootURL.appendingPathComponent("test.mov")
+        try "fake video".write(to: videoFile, atomically: true, encoding: .utf8)
+        
+        // Create detection result with only image (simulating filtered scan with mediaTypes=.images)
+        let imageCandidate = CandidateMediaItem(
+            path: imageFile.path,
+            size: 1024,
+            modificationDate: ISO8601DateFormatter().string(from: Date()),
+            fileName: "test.jpg"
+        )
+        
+        // Detection result only contains image (video was filtered out at scan stage)
+        let detectionResult = DetectionResult(
+            sourceId: source.sourceId,
+            libraryId: libraryId,
+            candidates: [
+                CandidateItemResult(item: imageCandidate, status: "new")
+            ],
+            summary: DetectionSummary(totalScanned: 1, newItems: 1, knownItems: 0)
+        )
+        
+        // Execute import with only image candidate
+        let options = ImportOptions(collisionPolicy: .rename)
+        let importResult = try ImportExecutor.executeImport(
+            detectionResult: detectionResult,
+            selectedItems: [imageCandidate],
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId,
+            options: options
+        )
+        
+        // Verify only image was imported (video was never in detection result, so can't be imported)
+        XCTAssertEqual(importResult.summary.total, 1)
+        XCTAssertEqual(importResult.summary.imported, 1)
+        
+        // Verify only image file exists in library
+        let importedItems = importResult.items.filter { $0.status == .imported }
+        XCTAssertEqual(importedItems.count, 1)
+        XCTAssertTrue(importedItems.first?.sourcePath.contains("test.jpg") ?? false)
+        
+        // Verify video file was never processed (not in detection result)
+        XCTAssertFalse(importResult.items.contains { $0.sourcePath.contains("test.mov") })
+    }
 }

@@ -293,13 +293,14 @@ public struct DetectionOrchestrator {
             throw SourceAssociationError.sourceNotFound(sourceId)
         }
         
-        // Update source with new lastDetectedAt
+        // Update source with new lastDetectedAt (preserve mediaTypes field)
         let updatedSource = Source(
             sourceId: association.sources[index].sourceId,
             type: association.sources[index].type,
             path: association.sources[index].path,
             attachedAt: association.sources[index].attachedAt,
-            lastDetectedAt: timestamp
+            lastDetectedAt: timestamp,
+            mediaTypes: association.sources[index].mediaTypes
         )
         
         association.sources[index] = updatedSource

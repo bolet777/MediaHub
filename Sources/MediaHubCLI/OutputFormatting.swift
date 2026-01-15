@@ -101,6 +101,7 @@ struct SourceListFormatter: OutputFormatter {
             output += "\(index + 1). \(source.path)\n"
             output += "   ID: \(source.sourceId)\n"
             output += "   Type: \(source.type.rawValue)\n"
+            output += "   Media types: \(source.effectiveMediaTypes.rawValue)\n"
             output += "   Attached: \(source.attachedAt)\n"
             if let lastDetected = source.lastDetectedAt {
                 output += "   Last detected: \(lastDetected)\n"
@@ -116,7 +117,28 @@ struct SourceListFormatter: OutputFormatter {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         
-        guard let data = try? encoder.encode(sources),
+        // Create wrapper struct to ensure mediaTypes is always included (defaults to "both" when nil)
+        struct SourceInfo: Codable {
+            let sourceId: String
+            let type: String
+            let path: String
+            let attachedAt: String
+            let lastDetectedAt: String?
+            let mediaTypes: String // Always present, defaults to "both" when nil
+            
+            init(from source: Source) {
+                self.sourceId = source.sourceId
+                self.type = source.type.rawValue
+                self.path = source.path
+                self.attachedAt = source.attachedAt
+                self.lastDetectedAt = source.lastDetectedAt
+                self.mediaTypes = source.effectiveMediaTypes.rawValue
+            }
+        }
+        
+        let sourceInfos = sources.map { SourceInfo(from: $0) }
+        
+        guard let data = try? encoder.encode(sourceInfos),
               let jsonString = String(data: data, encoding: .utf8) else {
             return "[]"
         }
@@ -338,6 +360,7 @@ struct StatusFormatter: OutputFormatter {
     let library: OpenedLibrary
     let sources: [Source]
     let baselineIndex: BaselineIndex?
+    let statistics: LibraryStatistics?
     let outputFormat: OutputFormat
     
     func format() -> String {
@@ -349,6 +372,13 @@ struct StatusFormatter: OutputFormatter {
         }
     }
     
+    /// Formats a number with comma separators for readability
+    private func formatNumber(_ number: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
+    }
+    
     private func formatHumanReadable() -> String {
         var output = "Library Status\n"
         output += "==============\n\n"
@@ -356,6 +386,35 @@ struct StatusFormatter: OutputFormatter {
         output += "ID: \(library.metadata.libraryId)\n"
         output += "Version: \(library.metadata.libraryVersion)\n"
         output += "Sources: \(sources.count)\n"
+        
+        // Statistics (if baseline index is available)
+        if let stats = statistics {
+            output += "\nStatistics:\n"
+            output += "  Total items: \(formatNumber(stats.totalItems))\n"
+            
+            if !stats.byYear.isEmpty {
+                output += "  By year:\n"
+                // Sort years descending for display
+                let sortedYears = stats.byYear.keys.sorted(by: >)
+                for year in sortedYears {
+                    if let count = stats.byYear[year] {
+                        output += "    \(year): \(formatNumber(count))\n"
+                    }
+                }
+            }
+            
+            if !stats.byMediaType.isEmpty {
+                output += "  By media type:\n"
+                if let imagesCount = stats.byMediaType["images"], imagesCount > 0 {
+                    output += "    Images: \(formatNumber(imagesCount))\n"
+                }
+                if let videosCount = stats.byMediaType["videos"], videosCount > 0 {
+                    output += "    Videos: \(formatNumber(videosCount))\n"
+                }
+            }
+        } else {
+            output += "\nStatistics: N/A (baseline index not available)\n"
+        }
         
         // Hash coverage stats (if baseline index is available)
         if let index = baselineIndex {
@@ -371,6 +430,7 @@ struct StatusFormatter: OutputFormatter {
             output += "\nAttached sources:\n"
             for (index, source) in sources.enumerated() {
                 output += "  \(index + 1). \(source.path) (\(source.sourceId))\n"
+                output += "     Media types: \(source.effectiveMediaTypes.rawValue)\n"
                 if let lastDetected = source.lastDetectedAt {
                     output += "     Last detected: \(lastDetected)\n"
                 }
@@ -390,13 +450,50 @@ struct StatusFormatter: OutputFormatter {
             let hashCoverage: Double
         }
         
+        struct StatisticsInfo: Codable {
+            let totalItems: Int
+            let byYear: [String: Int]
+            let byMediaType: [String: Int]
+        }
+        
+        // SourceInfo wrapper to ensure mediaTypes is always included (defaults to "both" when nil)
+        struct SourceInfo: Codable {
+            let sourceId: String
+            let type: String
+            let path: String
+            let attachedAt: String
+            let lastDetectedAt: String?
+            let mediaTypes: String // Always present, defaults to "both" when nil
+            
+            init(from source: Source) {
+                self.sourceId = source.sourceId
+                self.type = source.type.rawValue
+                self.path = source.path
+                self.attachedAt = source.attachedAt
+                self.lastDetectedAt = source.lastDetectedAt
+                self.mediaTypes = source.effectiveMediaTypes.rawValue
+            }
+        }
+        
         struct StatusInfo: Codable {
             let path: String
             let identifier: String
             let version: String
             let sourceCount: Int
-            let sources: [Source]
+            let sources: [SourceInfo]
+            let statistics: StatisticsInfo?
             let hashCoverage: HashCoverageInfo?
+        }
+        
+        let statisticsInfo: StatisticsInfo?
+        if let stats = statistics {
+            statisticsInfo = StatisticsInfo(
+                totalItems: stats.totalItems,
+                byYear: stats.byYear,
+                byMediaType: stats.byMediaType
+            )
+        } else {
+            statisticsInfo = nil
         }
         
         let hashCoverageInfo: HashCoverageInfo?
@@ -410,12 +507,15 @@ struct StatusFormatter: OutputFormatter {
             hashCoverageInfo = nil
         }
         
+        let sourceInfos = sources.map { SourceInfo(from: $0) }
+        
         let statusInfo = StatusInfo(
             path: library.rootURL.path,
             identifier: library.metadata.libraryId,
             version: library.metadata.libraryVersion,
             sourceCount: sources.count,
-            sources: sources,
+            sources: sourceInfos,
+            statistics: statisticsInfo,
             hashCoverage: hashCoverageInfo
         )
         

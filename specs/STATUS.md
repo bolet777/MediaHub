@@ -145,6 +145,39 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 - Status command integration: Hash coverage statistics reporting (human-readable and JSON)
 - Backward compatible: Works with v1.0 indexes (no hashes) and v1.1 indexes (partial hashes)
 
+### ✅ Slice 10 — Source Media Types + Library Statistics
+**Status**: Complete and validated (2026-01-15)  
+**Spec**: `specs/010-source-media-types-library-statistics/spec.md`  
+**Validation**: `specs/010-source-media-types-library-statistics/validation.md`
+
+**Deliverables**:
+- Source media type filtering: `--media-types` flag for `source attach` (images, videos, both)
+- Media type filtering at scan stage: Filtering occurs during source scanning, affecting both `detect` and `import` operations
+- Backward compatibility: Existing Sources without `mediaTypes` field default to "both" behavior
+- Library statistics computation: Total items, distribution by year, and distribution by media type from BaselineIndex
+- Status command integration: Statistics displayed in `mediahub status` output (human-readable and JSON)
+- Source list integration: Media types displayed in `mediahub source list` output (human-readable and JSON)
+- JSON output conventions: Statistics field omitted when BaselineIndex unavailable (matches `hashCoverage` pattern)
+- Single source of truth: Media type classification uses `MediaFileFormat` component (no duplication)
+
+**Note**: Validation required minor command adaptations (`detect` and `import` require `<source-id>` argument); `validation.md` was updated accordingly.
+
+#### Follow-ups / Watchlist (non-blocking)
+
+- **[FOLLOW-UP] JSON explicitness for mediaTypes**: Decide if public JSON should always include `mediaTypes` explicitly vs omit when nil (persistence can omit). Currently: `source list`/`status` JSON always include `mediaTypes` via wrapper; confirm consistency across all JSON surfaces. *Suggested location: Future JSON schema review or Slice 11+ (UI integration)*
+
+- **[DECISION] Invalid stored mediaTypes handling**: Current choice: enum decode error (Option 2). Consider whether a future UX improvement should wrap `DecodingError` with a user-facing message and remediation steps, or fallback-to-both policy. *Suggested location: Future error handling enhancement or Slice 11+ (UI error display)*
+
+- **[VERIFY] Scan classification helpers duplication**: Ensure scan + stats reuse the same helper/classification path (`MediaFileFormat`). Avoid parallel logic. *Suggested location: Code review or future refactoring pass*
+
+- **[FOLLOW-UP] Micro-perf: ISO8601DateFormatter allocation**: Consider static/shared formatter if performance ever matters (non-urgent). *Suggested location: Performance optimization pass (Slice 9c or future)*
+
+- **[FOLLOW-UP] Source metadata updates copying fields manually**: `updateSourceLastDetected` copies fields; consider safer update strategy if `Source` grows (e.g., copy + override pattern), to avoid future omissions. *Suggested location: Future refactoring when `Source` structure evolves*
+
+- **[VERIFY] Year extraction robustness**: Currently derived from first path component (YYYY). Confirm `BaselineIndexEntry.path` is normalized relative path; if absolute paths appear, consider deriving year from a date field (if present) or keep "unknown" bucket. *Suggested location: BaselineIndex validation or future path normalization review*
+
+- **[VERIFY] StatusCommandTests file hygiene**: Confirm no accidental duplication/rename occurred when adding `StatusCommandTests` (tests pass, but keep an eye on structure). *Suggested location: Code review or test structure audit*
+
 ---
 
 ## Planned Slices
@@ -153,7 +186,6 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 |-------|-------|------|--------|------------|-------|--------|
 | 9b | Duplicate Reporting & Audit | Provide comprehensive duplicate reporting and audit capabilities to help users understand duplicate content across sources and libraries | Content Integrity & Deduplication | Slice 8, Slice 9 | Core / CLI | Proposed |
 | 9c | Performance & Scale Guardrails | Establish performance benchmarks, scale testing, and guardrails to ensure MediaHub maintains acceptable performance as libraries grow | Scalability & Performance | Slice 8 | Core / CLI | Proposed |
-| 10 | Source Media Types + Library Statistics | Add source media type filtering (images/videos/both) and library statistics (total, by year, by type) via BaselineIndex | User Experience & Safety | Slice 7, Slice 9 | Core / CLI | Proposed |
 | 11 | UI Shell v1 + Library Discovery | Basic SwiftUI app with home screen, sidebar libraries, and library discovery/selection | User Experience & Safety | Slice 1 | UI | Proposed |
 | 12 | UI Create / Adopt Wizard v1 | Unified wizard for library creation and adoption with preview dry-run and explicit confirmation | User Experience & Safety | Slice 1, Slice 6 | UI | Proposed |
 | 13 | UI Sources + Detect + Import (P1) | Source management (attach/detach with media types), detect preview/run, and import preview/confirm/run workflows | User Experience & Safety | Slice 2, Slice 3, Slice 10 | UI | Proposed |

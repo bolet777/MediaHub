@@ -32,7 +32,7 @@ struct StatusCommand: ParsableCommand {
             libraryId: openedLibrary.metadata.libraryId
         )
         
-        // Try to load baseline index for hash coverage stats (optional, backward compatible)
+        // Try to load baseline index for hash coverage stats and statistics (optional, backward compatible)
         let indexState = BaselineIndexLoader.tryLoadBaselineIndex(libraryRoot: libraryPath)
         let baselineIndex: BaselineIndex?
         if case .valid(let index) = indexState {
@@ -41,11 +41,20 @@ struct StatusCommand: ParsableCommand {
             baselineIndex = nil
         }
         
+        // Compute statistics when baseline index is available
+        let statistics: LibraryStatistics?
+        if let index = baselineIndex {
+            statistics = LibraryStatisticsComputer.compute(from: index)
+        } else {
+            statistics = nil
+        }
+        
         // Format and output status
         let formatter = StatusFormatter(
             library: openedLibrary,
             sources: sources,
             baselineIndex: baselineIndex,
+            statistics: statistics,
             outputFormat: json ? .json : .humanReadable
         )
         print(formatter.format())

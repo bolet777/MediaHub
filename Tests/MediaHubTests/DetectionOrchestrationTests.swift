@@ -426,4 +426,153 @@ final class DetectionOrchestrationTests: XCTestCase {
         let indexContent = try String(contentsOfFile: indexPath, encoding: .utf8)
         XCTAssertTrue(indexContent.contains("2.0"), "Index should not be modified by detection")
     }
+    
+    // MARK: - Media Type Filtering Tests
+    
+    func testExecuteDetectionWithMediaTypesImages() throws {
+        // Create source with both images and videos
+        let imageFile = sourceDirectory.appendingPathComponent("test.jpg")
+        try "fake image".write(to: imageFile, atomically: true, encoding: .utf8)
+        
+        let videoFile = sourceDirectory.appendingPathComponent("test.mov")
+        try "fake video".write(to: videoFile, atomically: true, encoding: .utf8)
+        
+        let source = Source(
+            sourceId: SourceIdentifierGenerator.generate(),
+            type: .folder,
+            path: sourceDirectory.path,
+            mediaTypes: .images
+        )
+        
+        // Attach source to library
+        try SourceAssociationManager.attach(
+            source: source,
+            to: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Execute detection
+        let result = try DetectionOrchestrator.executeDetection(
+            source: source,
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Should only detect image files
+        XCTAssertEqual(result.summary.totalScanned, 1)
+        XCTAssertEqual(result.candidates.count, 1)
+        XCTAssertTrue(result.candidates[0].item.fileName == "test.jpg")
+        XCTAssertFalse(result.candidates.contains { $0.item.fileName == "test.mov" })
+    }
+    
+    func testExecuteDetectionWithMediaTypesVideos() throws {
+        // Create source with both images and videos
+        let imageFile = sourceDirectory.appendingPathComponent("test.jpg")
+        try "fake image".write(to: imageFile, atomically: true, encoding: .utf8)
+        
+        let videoFile = sourceDirectory.appendingPathComponent("test.mov")
+        try "fake video".write(to: videoFile, atomically: true, encoding: .utf8)
+        
+        let source = Source(
+            sourceId: SourceIdentifierGenerator.generate(),
+            type: .folder,
+            path: sourceDirectory.path,
+            mediaTypes: .videos
+        )
+        
+        // Attach source to library
+        try SourceAssociationManager.attach(
+            source: source,
+            to: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Execute detection
+        let result = try DetectionOrchestrator.executeDetection(
+            source: source,
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Should only detect video files
+        XCTAssertEqual(result.summary.totalScanned, 1)
+        XCTAssertEqual(result.candidates.count, 1)
+        XCTAssertTrue(result.candidates[0].item.fileName == "test.mov")
+        XCTAssertFalse(result.candidates.contains { $0.item.fileName == "test.jpg" })
+    }
+    
+    func testExecuteDetectionWithMediaTypesBoth() throws {
+        // Create source with both images and videos
+        let imageFile = sourceDirectory.appendingPathComponent("test.jpg")
+        try "fake image".write(to: imageFile, atomically: true, encoding: .utf8)
+        
+        let videoFile = sourceDirectory.appendingPathComponent("test.mov")
+        try "fake video".write(to: videoFile, atomically: true, encoding: .utf8)
+        
+        let source = Source(
+            sourceId: SourceIdentifierGenerator.generate(),
+            type: .folder,
+            path: sourceDirectory.path,
+            mediaTypes: .both
+        )
+        
+        // Attach source to library
+        try SourceAssociationManager.attach(
+            source: source,
+            to: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Execute detection
+        let result = try DetectionOrchestrator.executeDetection(
+            source: source,
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Should detect both images and videos
+        XCTAssertEqual(result.summary.totalScanned, 2)
+        XCTAssertEqual(result.candidates.count, 2)
+        XCTAssertTrue(result.candidates.contains { $0.item.fileName == "test.jpg" })
+        XCTAssertTrue(result.candidates.contains { $0.item.fileName == "test.mov" })
+    }
+    
+    func testExecuteDetectionPreservesMediaTypesWhenUpdatingMetadata() throws {
+        // Add media file to source
+        let sourceFile = sourceDirectory.appendingPathComponent("new.jpg")
+        try "fake image".write(to: sourceFile, atomically: true, encoding: .utf8)
+        
+        let source = Source(
+            sourceId: SourceIdentifierGenerator.generate(),
+            type: .folder,
+            path: sourceDirectory.path,
+            mediaTypes: .images
+        )
+        
+        // Attach source to library
+        try SourceAssociationManager.attach(
+            source: source,
+            to: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Execute detection
+        let result = try DetectionOrchestrator.executeDetection(
+            source: source,
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Verify source metadata was updated AND mediaTypes field is preserved
+        let sources = try SourceAssociationManager.retrieveSources(
+            for: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        let updatedSource = sources.first { $0.sourceId == source.sourceId }
+        XCTAssertNotNil(updatedSource)
+        XCTAssertNotNil(updatedSource?.lastDetectedAt)
+        XCTAssertEqual(updatedSource?.lastDetectedAt, result.detectedAt)
+        XCTAssertEqual(updatedSource?.mediaTypes, .images, "mediaTypes field should be preserved when updating lastDetectedAt")
+    }
 }
