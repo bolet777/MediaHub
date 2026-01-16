@@ -52,13 +52,12 @@ struct ContentView: View {
         } detail: {
             // Right detail: empty state or selected library
             VStack(spacing: 16) {
-                if let errorMessage = appState.errorMessage {
-                    Text(errorMessage)
-                        .foregroundStyle(.red)
-                }
-                
+                // Show only one error at a time (prefer libraryOpenError)
                 if let libraryOpenError = appState.libraryOpenError {
                     Text(libraryOpenError)
+                        .foregroundStyle(.red)
+                } else if let errorMessage = appState.errorMessage {
+                    Text(errorMessage)
                         .foregroundStyle(.red)
                 }
                 
@@ -71,6 +70,23 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle("MediaHub")
+        .task {
+            // Periodic validation of opened library path
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                
+                guard let openedPath = appState.openedLibraryPath else {
+                    continue
+                }
+                
+                // Validate that the library is still accessible
+                if LibraryPathValidator.validateSelectedLibraryPath(openedPath) != nil {
+                    // Library is no longer accessible
+                    appState.clearOpenedLibrary(error: "Opened library is no longer accessible (moved or deleted).")
+                    appState.selectedLibraryPath = nil
+                }
+            }
+        }
     }
     
     private func chooseFolder() {
@@ -87,6 +103,7 @@ struct ContentView: View {
             appState.selectedLibraryPath = nil
             appState.discoveredLibraries = []
             appState.errorMessage = nil
+            appState.clearOpenedLibrary(error: nil)
             appState.discoveryRootPath = path
             appState.isDiscovering = true
             
@@ -130,9 +147,7 @@ struct ContentView: View {
                 if let validationError = LibraryPathValidator.validateSelectedLibraryPath(path) {
                     appState.selectedLibraryPath = nil
                     appState.errorMessage = validationError
-                    appState.openedLibraryPath = nil
-                    appState.libraryContext = nil
-                    appState.libraryOpenError = nil
+                    appState.clearOpenedLibrary(error: nil)
                 } else {
                     appState.selectedLibraryPath = path
                     appState.errorMessage = nil
@@ -140,21 +155,15 @@ struct ContentView: View {
                     // Attempt to open the library
                     do {
                         let openedLibrary = try LibraryStatusService.openLibrary(at: path)
-                        appState.openedLibraryPath = path
-                        appState.libraryContext = openedLibrary
-                        appState.libraryOpenError = nil
+                        appState.setOpenedLibrary(path: path, context: openedLibrary)
                     } catch {
-                        appState.openedLibraryPath = nil
-                        appState.libraryContext = nil
-                        appState.libraryOpenError = "Failed to open library: \(error.localizedDescription)"
+                        appState.clearOpenedLibrary(error: "Failed to open library: \(error.localizedDescription)")
                     }
                 }
             } else {
                 appState.selectedLibraryPath = nil
                 appState.errorMessage = library.validationError ?? "This library is invalid (unreadable or malformed .mediahub/library.json)."
-                appState.openedLibraryPath = nil
-                appState.libraryContext = nil
-                appState.libraryOpenError = nil
+                appState.clearOpenedLibrary(error: nil)
             }
         }
     }
