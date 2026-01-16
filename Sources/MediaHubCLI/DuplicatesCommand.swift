@@ -43,15 +43,24 @@ struct DuplicatesCommand: ParsableCommand {
             try validateOutputPath(outputPath)
         }
 
-        // Analyze duplicates using core component
-        let (groups, summary) = try DuplicateReporting.analyzeDuplicates(in: libraryPath)
+        // Measure duration and analyze duplicates using core component
+        let measurement = try DurationMeasurement.measure {
+            try DuplicateReporting.analyzeDuplicates(in: libraryPath)
+        }
+        let (groups, summary) = measurement.result
+        let durationSeconds = measurement.durationSeconds
+        
+        // Compute scale metrics (best-effort, may be nil if index is missing/invalid)
+        let scaleMetrics = ScaleMetricsComputer.compute(for: libraryPath)
 
         // Format report
         let formatter = DuplicateReportFormatter(
             libraryPath: libraryPath,
             groups: groups,
             summary: summary,
-            outputFormat: reportFormat
+            outputFormat: reportFormat,
+            scaleMetrics: scaleMetrics,
+            durationSeconds: durationSeconds
         )
         let reportContent = formatter.format()
 

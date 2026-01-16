@@ -264,7 +264,9 @@ final class DuplicateReportingTests: XCTestCase {
             libraryPath: "/test/library",
             groups: [group],
             summary: summary,
-            outputFormat: .text
+            outputFormat: .text,
+            scaleMetrics: nil,
+            durationSeconds: nil
         )
         let output = formatter.format()
 
@@ -293,7 +295,9 @@ final class DuplicateReportingTests: XCTestCase {
             libraryPath: "/test/library",
             groups: [group],
             summary: summary,
-            outputFormat: .json
+            outputFormat: .json,
+            scaleMetrics: nil,
+            durationSeconds: nil
         )
         let output = formatter.format()
 
@@ -323,7 +327,7 @@ final class DuplicateReportingTests: XCTestCase {
             let timestamp: String
         }
 
-        let jsonData = output.data(using: .utf8)!
+        let jsonData = output.data(using: String.Encoding.utf8)!
         let report = try decoder.decode(DuplicateReportJSON.self, from: jsonData)
 
         // Verify structure
@@ -360,7 +364,9 @@ final class DuplicateReportingTests: XCTestCase {
             libraryPath: "/test/library",
             groups: sortedGroups,
             summary: summary,
-            outputFormat: .csv
+            outputFormat: .csv,
+            scaleMetrics: nil,
+            durationSeconds: nil
         )
         let output = formatter.format()
 
@@ -399,7 +405,9 @@ final class DuplicateReportingTests: XCTestCase {
             libraryPath: "/test/library",
             groups: [group],
             summary: summary,
-            outputFormat: .csv
+            outputFormat: .csv,
+            scaleMetrics: nil,
+            durationSeconds: nil
         )
         let output = formatter.format()
 
@@ -438,7 +446,9 @@ final class DuplicateReportingTests: XCTestCase {
             libraryPath: "/test/library",
             groups: sortedGroups,
             summary: summary,
-            outputFormat: .json
+            outputFormat: .json,
+            scaleMetrics: nil,
+            durationSeconds: nil
         )
         let output1 = formatter1.format()
 
@@ -446,7 +456,9 @@ final class DuplicateReportingTests: XCTestCase {
             libraryPath: "/test/library",
             groups: sortedGroups,
             summary: summary,
-            outputFormat: .json
+            outputFormat: .json,
+            scaleMetrics: nil,
+            durationSeconds: nil
         )
         let output2 = formatter2.format()
 
@@ -466,7 +478,7 @@ final class DuplicateReportingTests: XCTestCase {
             let path: String
         }
 
-        let report1 = try decoder.decode(DuplicateReportJSON.self, from: output1.data(using: .utf8)!)
+        let report1 = try decoder.decode(DuplicateReportJSON.self, from: output1.data(using: String.Encoding.utf8)!)
         XCTAssertEqual(report1.groups[0].hash, "sha256:hashA", "Groups should be sorted by hash")
         XCTAssertEqual(report1.groups[1].hash, "sha256:hashB", "Groups should be sorted by hash")
         XCTAssertEqual(report1.groups[0].files[0].path, "2024/01/file3.jpg", "Files should be sorted by path")
@@ -482,7 +494,9 @@ final class DuplicateReportingTests: XCTestCase {
             libraryPath: "/test/library",
             groups: [],
             summary: summary,
-            outputFormat: .text
+            outputFormat: .text,
+            scaleMetrics: nil,
+            durationSeconds: nil
         )
         let textOutput = textFormatter.format()
         XCTAssertTrue(textOutput.contains("No duplicates found"), "Should indicate no duplicates")
@@ -492,7 +506,9 @@ final class DuplicateReportingTests: XCTestCase {
             libraryPath: "/test/library",
             groups: [],
             summary: summary,
-            outputFormat: .json
+            outputFormat: .json,
+            scaleMetrics: nil,
+            durationSeconds: nil
         )
         let jsonOutput = jsonFormatter.format()
         let decoder = JSONDecoder()
@@ -503,7 +519,7 @@ final class DuplicateReportingTests: XCTestCase {
         struct SummaryJSON: Codable {
             let duplicateGroups: Int
         }
-        let report = try decoder.decode(DuplicateReportJSON.self, from: jsonOutput.data(using: .utf8)!)
+        let report = try decoder.decode(DuplicateReportJSON.self, from: jsonOutput.data(using: String.Encoding.utf8)!)
         XCTAssertEqual(report.summary.duplicateGroups, 0, "Should have 0 groups")
 
         // CSV format
@@ -511,7 +527,9 @@ final class DuplicateReportingTests: XCTestCase {
             libraryPath: "/test/library",
             groups: [],
             summary: summary,
-            outputFormat: .csv
+            outputFormat: .csv,
+            scaleMetrics: nil,
+            durationSeconds: nil
         )
         let csvOutput = csvFormatter.format()
         let csvLines = csvOutput.components(separatedBy: "\n").filter { !$0.isEmpty }
@@ -539,7 +557,9 @@ final class DuplicateReportingTests: XCTestCase {
             libraryPath: "/test/library",
             groups: [group],
             summary: summary,
-            outputFormat: .json
+            outputFormat: .json,
+            scaleMetrics: nil,
+            durationSeconds: nil
         )
         let reportContent = formatter.format()
 
@@ -583,7 +603,9 @@ final class DuplicateReportingTests: XCTestCase {
             libraryPath: "/test/library",
             groups: [],
             summary: summary,
-            outputFormat: .text
+            outputFormat: .text,
+            scaleMetrics: nil,
+            durationSeconds: nil
         )
         let reportContent = formatter.format()
 
@@ -634,7 +656,9 @@ final class DuplicateReportingTests: XCTestCase {
             libraryPath: "/test/library",
             groups: [],
             summary: DuplicateSummary(groups: []),
-            outputFormat: .text
+            outputFormat: .text,
+            scaleMetrics: nil,
+            durationSeconds: nil
         )
         let reportContent = formatter.format()
         guard let data = reportContent.data(using: .utf8) else {
@@ -672,7 +696,9 @@ final class DuplicateReportingTests: XCTestCase {
             libraryPath: libraryRoot,
             groups: groups,
             summary: summary,
-            outputFormat: .json
+            outputFormat: .json,
+            scaleMetrics: nil,
+            durationSeconds: nil
         )
         let reportContent = formatter.format()
         guard let data = reportContent.data(using: .utf8) else {
@@ -700,7 +726,9 @@ final class DuplicateReportingTests: XCTestCase {
             libraryPath: "/test/library",
             groups: [],
             summary: summary,
-            outputFormat: .json
+            outputFormat: .json,
+            scaleMetrics: nil,
+            durationSeconds: nil
         )
         let reportContent = formatter.format()
 
@@ -723,5 +751,281 @@ final class DuplicateReportingTests: XCTestCase {
         }
         let report = try decoder.decode(DuplicateReportJSON.self, from: data)
         XCTAssertEqual(report.summary.duplicateGroups, 0, "Empty report should have 0 groups")
+    }
+    
+    // MARK: - Performance Section Tests
+    
+    func testPerformanceSectionInTextOutput() throws {
+        // Create test data
+        let files = [
+            DuplicateFile(path: "2023/01/file1.jpg", sizeBytes: 1000, timestamp: "2023-01-01T00:00:00Z"),
+            DuplicateFile(path: "2023/02/file2.jpg", sizeBytes: 2000, timestamp: "2023-02-01T00:00:00Z")
+        ]
+        let group = DuplicateGroup(hash: "sha256:testhash", files: files)
+        let summary = DuplicateSummary(groups: [group])
+        
+        // Create scale metrics
+        let scaleMetrics = ScaleMetrics(
+            fileCount: 10,
+            totalSizeBytes: 5000,
+            hashCoveragePercent: 80.0
+        )
+        
+        // Format as text with performance metrics
+        let formatter = DuplicateReportFormatter(
+            libraryPath: "/test/library",
+            groups: [group],
+            summary: summary,
+            outputFormat: .text,
+            scaleMetrics: scaleMetrics,
+            durationSeconds: 0.123
+        )
+        let output = formatter.format()
+        
+        // Verify Performance section is present
+        XCTAssertTrue(output.contains("Performance"), "Performance section should be present")
+        XCTAssertTrue(output.contains("Duration:"), "Duration should be present")
+        XCTAssertTrue(output.contains("File count:"), "File count should be present")
+        XCTAssertTrue(output.contains("Total size:"), "Total size should be present")
+        XCTAssertTrue(output.contains("Hash coverage:"), "Hash coverage should be present")
+        
+        // Verify existing content is preserved
+        XCTAssertTrue(output.contains("Duplicate Report for Library:"), "Existing header should be preserved")
+        XCTAssertTrue(output.contains("Summary:"), "Existing summary should be preserved")
+    }
+    
+    func testPerformanceSectionNotInJSONOutput() throws {
+        // Create test data
+        let files = [
+            DuplicateFile(path: "2023/01/file1.jpg", sizeBytes: 1000, timestamp: "2023-01-01T00:00:00Z")
+        ]
+        let group = DuplicateGroup(hash: "sha256:testhash", files: files)
+        let summary = DuplicateSummary(groups: [group])
+        
+        let scaleMetrics = ScaleMetrics(
+            fileCount: 5,
+            totalSizeBytes: 1000,
+            hashCoveragePercent: 50.0
+        )
+        
+        // Format as JSON with performance metrics
+        let formatter = DuplicateReportFormatter(
+            libraryPath: "/test/library",
+            groups: [group],
+            summary: summary,
+            outputFormat: .json,
+            scaleMetrics: scaleMetrics,
+            durationSeconds: 0.123
+        )
+        let output = formatter.format()
+        
+        // Verify Performance section is NOT in JSON
+        XCTAssertFalse(output.contains("Performance"), "Performance section should not be in JSON output")
+        XCTAssertFalse(output.contains("Duration:"), "Duration should not be in JSON output")
+        
+        // Verify JSON is still valid
+        let jsonData = output.data(using: String.Encoding.utf8)!
+        let json = try JSONSerialization.jsonObject(with: jsonData) as! [String: Any]
+        XCTAssertNotNil(json["library"], "JSON should still be valid")
+    }
+    
+    func testPerformanceSectionNAWhenIndexMissing() throws {
+        // Create test data
+        let files = [
+            DuplicateFile(path: "2023/01/file1.jpg", sizeBytes: 1000, timestamp: "2023-01-01T00:00:00Z")
+        ]
+        let group = DuplicateGroup(hash: "sha256:testhash", files: files)
+        let summary = DuplicateSummary(groups: [group])
+        
+        // Format as text without scale metrics (index missing)
+        let formatter = DuplicateReportFormatter(
+            libraryPath: "/test/library",
+            groups: [group],
+            summary: summary,
+            outputFormat: .text,
+            scaleMetrics: nil,
+            durationSeconds: nil
+        )
+        let output = formatter.format()
+        
+        // Verify Performance section shows N/A
+        XCTAssertTrue(output.contains("Performance"), "Performance section should be present")
+        XCTAssertTrue(output.contains("Performance: N/A (baseline index not available)"), "Performance should show N/A when index missing")
+        
+        // Verify existing content is preserved
+        XCTAssertTrue(output.contains("Duplicate Report for Library:"), "Existing header should be preserved")
+    }
+    
+    // MARK: - JSON Performance Object Tests
+    
+    func testDuplicateReportJSONIncludesPerformance() throws {
+        // Create test data
+        let files = [
+            DuplicateFile(path: "2023/01/file1.jpg", sizeBytes: 1000, timestamp: "2023-01-01T00:00:00Z"),
+            DuplicateFile(path: "2023/02/file2.jpg", sizeBytes: 1000, timestamp: "2023-02-01T00:00:00Z")
+        ]
+        let group = DuplicateGroup(hash: "sha256:testhash", files: files)
+        let summary = DuplicateSummary(groups: [group])
+        
+        // Create scale metrics
+        let scaleMetrics = ScaleMetrics(
+            fileCount: 10,
+            totalSizeBytes: 5000,
+            hashCoveragePercent: 80.0
+        )
+        
+        // Format as JSON with performance metrics
+        let formatter = DuplicateReportFormatter(
+            libraryPath: "/test/library",
+            groups: [group],
+            summary: summary,
+            outputFormat: .json,
+            scaleMetrics: scaleMetrics,
+            durationSeconds: 0.123
+        )
+        let jsonString = formatter.format()
+        
+        // Verify JSON is valid and parseable
+        let jsonData = jsonString.data(using: String.Encoding.utf8)!
+        let json = try JSONSerialization.jsonObject(with: jsonData) as! [String: Any]
+        
+        // Verify performance field is present
+        XCTAssertNotNil(json["performance"], "performance field should be present when scaleMetrics available")
+        let performance = json["performance"] as! [String: Any]
+        
+        // Verify performance structure
+        if let duration = performance["durationSeconds"] as? Double {
+            XCTAssertGreaterThanOrEqual(duration, 0.0, "durationSeconds should be non-negative")
+        } else {
+            XCTAssertNil(performance["durationSeconds"], "durationSeconds may be null")
+        }
+        
+        XCTAssertNotNil(performance["scale"], "scale object should be present")
+        let scale = performance["scale"] as! [String: Any]
+        XCTAssertEqual(scale["fileCount"] as! Int, 10, "fileCount should match")
+        XCTAssertEqual(scale["totalSizeBytes"] as! Int64, 5000, "totalSizeBytes should match")
+        
+        if let coverage = scale["hashCoveragePercent"] as? Double {
+            XCTAssertEqual(coverage, 80.0, accuracy: 0.1, "hashCoveragePercent should match")
+        }
+        
+        // Verify no "Performance" text appears in JSON
+        XCTAssertFalse(jsonString.contains("Performance\n"), "Performance section text should not appear in JSON output")
+        XCTAssertFalse(jsonString.contains("Duration:"), "Duration label should not appear in JSON output")
+        
+        // Verify existing fields are preserved
+        XCTAssertNotNil(json["library"], "Existing fields should be preserved")
+        XCTAssertNotNil(json["summary"], "Existing fields should be preserved")
+        XCTAssertNotNil(json["groups"], "Existing fields should be preserved")
+    }
+    
+    func testDuplicateReportJSONOmitsPerformanceWhenIndexMissing() throws {
+        // Create test data
+        let files = [
+            DuplicateFile(path: "2023/01/file1.jpg", sizeBytes: 1000, timestamp: "2023-01-01T00:00:00Z")
+        ]
+        let group = DuplicateGroup(hash: "sha256:testhash", files: files)
+        let summary = DuplicateSummary(groups: [group])
+        
+        // Format as JSON without scale metrics (index missing)
+        let formatter = DuplicateReportFormatter(
+            libraryPath: "/test/library",
+            groups: [group],
+            summary: summary,
+            outputFormat: .json,
+            scaleMetrics: nil,
+            durationSeconds: nil
+        )
+        let jsonString = formatter.format()
+        
+        // Verify JSON is valid
+        let jsonData = jsonString.data(using: String.Encoding.utf8)!
+        let json = try JSONSerialization.jsonObject(with: jsonData) as! [String: Any]
+        
+        // Verify performance field is omitted (not null)
+        XCTAssertNil(json["performance"], "performance field should be omitted when scaleMetrics unavailable")
+        XCTAssertFalse(jsonString.contains("\"performance\""), "performance should not be present in JSON string")
+        
+        // Verify existing fields are preserved
+        XCTAssertNotNil(json["library"], "Existing fields should be preserved")
+        XCTAssertNotNil(json["summary"], "Existing fields should be preserved")
+    }
+    
+    func testDuplicateReportJSONValidWhenPerformancePresent() throws {
+        // Create test data
+        let files = [
+            DuplicateFile(path: "2023/01/file1.jpg", sizeBytes: 1000, timestamp: "2023-01-01T00:00:00Z")
+        ]
+        let group = DuplicateGroup(hash: "sha256:testhash", files: files)
+        let summary = DuplicateSummary(groups: [group])
+        
+        let scaleMetrics = ScaleMetrics(
+            fileCount: 5,
+            totalSizeBytes: 1000,
+            hashCoveragePercent: 50.0
+        )
+        
+        // Format as JSON with performance
+        let formatter = DuplicateReportFormatter(
+            libraryPath: "/test/library",
+            groups: [group],
+            summary: summary,
+            outputFormat: .json,
+            scaleMetrics: scaleMetrics,
+            durationSeconds: 0.123
+        )
+        let jsonString = formatter.format()
+        
+        // Verify JSON is valid and decodable using JSONDecoder
+        let decoder = JSONDecoder()
+        struct DuplicateReportJSON: Codable {
+            let library: String
+            let generated: String
+            let summary: SummaryJSON
+            let groups: [GroupJSON]
+            let performance: PerformanceJSON?
+            
+            struct SummaryJSON: Codable {
+                let duplicateGroups: Int
+                let totalDuplicateFiles: Int
+                let totalDuplicateSizeBytes: Int64
+                let potentialSavingsBytes: Int64
+            }
+            
+            struct GroupJSON: Codable {
+                let hash: String
+                let fileCount: Int
+                let totalSizeBytes: Int64
+                let files: [FileJSON]
+            }
+            
+            struct FileJSON: Codable {
+                let path: String
+                let sizeBytes: Int64
+                let timestamp: String
+            }
+            
+            struct PerformanceJSON: Codable {
+                let durationSeconds: Double?
+                let scale: ScaleJSON
+                
+                struct ScaleJSON: Codable {
+                    let fileCount: Int
+                    let totalSizeBytes: Int64
+                    let hashCoveragePercent: Double?
+                }
+            }
+        }
+        
+        let report = try decoder.decode(DuplicateReportJSON.self, from: jsonString.data(using: String.Encoding.utf8)!)
+        
+        // Verify performance is present and valid
+        XCTAssertNotNil(report.performance, "performance should be present")
+        XCTAssertEqual(report.performance!.scale.fileCount, 5, "fileCount should match")
+        XCTAssertEqual(report.performance!.scale.totalSizeBytes, 1000, "totalSizeBytes should match")
+        
+        // Verify existing fields are preserved
+        XCTAssertEqual(report.summary.duplicateGroups, 1, "Existing summary should be preserved")
+        XCTAssertEqual(report.groups.count, 1, "Existing groups should be preserved")
     }
 }

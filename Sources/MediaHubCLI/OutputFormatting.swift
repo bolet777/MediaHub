@@ -14,6 +14,87 @@ enum OutputFormat {
     case json
 }
 
+/// Shared helper for formatting Performance section (additive, human-readable only)
+func formatPerformanceSection(scaleMetrics: ScaleMetrics?, durationSeconds: Double?) -> String {
+    var output = "\nPerformance\n"
+    output += "-----------\n"
+    
+    if let metrics = scaleMetrics {
+        // Duration (informational, may be N/A)
+        if let duration = durationSeconds {
+            output += "- Duration: \(String(format: "%.2f", duration))s\n"
+        } else {
+            output += "- Duration: N/A\n"
+        }
+        
+        // File count
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        let fileCountFormatted = formatter.string(from: NSNumber(value: metrics.fileCount)) ?? "\(metrics.fileCount)"
+        output += "- File count: \(fileCountFormatted)\n"
+        
+        // Total size (human-readable format, deterministic from bytes)
+        let totalSizeFormatted = formatSizeBytes(metrics.totalSizeBytes)
+        output += "- Total size: \(totalSizeFormatted)\n"
+        
+        // Hash coverage (may be nil)
+        if let coverage = metrics.hashCoveragePercent {
+            output += "- Hash coverage: \(String(format: "%.1f", coverage))%\n"
+        } else {
+            output += "- Hash coverage: N/A\n"
+        }
+    } else {
+        // Scale metrics not available
+        output += "Performance: N/A (baseline index not available)\n"
+    }
+    
+    return output
+}
+
+/// Formats bytes to human-readable size (deterministic from bytes)
+/// Shared helper used by multiple formatters
+func formatSizeBytes(_ bytes: Int64) -> String {
+    if bytes < 1024 {
+        return "\(bytes) bytes"
+    } else if bytes < 1024 * 1024 {
+        let kb = Double(bytes) / 1024.0
+        return String(format: "%.1f KB", kb)
+    } else if bytes < 1024 * 1024 * 1024 {
+        let mb = Double(bytes) / (1024.0 * 1024.0)
+        return String(format: "%.1f MB", mb)
+    } else {
+        let gb = Double(bytes) / (1024.0 * 1024.0 * 1024.0)
+        return String(format: "%.2f GB", gb)
+    }
+}
+
+/// Shared JSON structures for performance reporting (additive, optional)
+struct PerformanceJSON: Codable {
+    let durationSeconds: Double?
+    let scale: ScaleMetricsJSON
+    
+    struct ScaleMetricsJSON: Codable {
+        let fileCount: Int
+        let totalSizeBytes: Int64
+        let hashCoveragePercent: Double?
+    }
+    
+    init?(scaleMetrics: ScaleMetrics?, durationSeconds: Double?) {
+        // Only create performance object if scaleMetrics is available
+        // (consistent with omitting optional fields when unavailable)
+        guard let metrics = scaleMetrics else {
+            return nil
+        }
+        
+        self.durationSeconds = durationSeconds
+        self.scale = ScaleMetricsJSON(
+            fileCount: metrics.fileCount,
+            totalSizeBytes: metrics.totalSizeBytes,
+            hashCoveragePercent: metrics.hashCoveragePercent
+        )
+    }
+}
+
 /// Base protocol for output formatting
 protocol OutputFormatter {
     func format() -> String
@@ -361,6 +442,8 @@ struct StatusFormatter: OutputFormatter {
     let sources: [Source]
     let baselineIndex: BaselineIndex?
     let statistics: LibraryStatistics?
+    let scaleMetrics: ScaleMetrics?
+    let durationSeconds: Double?
     let outputFormat: OutputFormat
     
     func format() -> String {
@@ -437,7 +520,43 @@ struct StatusFormatter: OutputFormatter {
             }
         }
         
+        // Performance section (additive, human-readable only)
+        output += "\nPerformance\n"
+        output += "-----------\n"
+        
+        if let metrics = scaleMetrics {
+            // Duration (informational, may be N/A)
+            if let duration = durationSeconds {
+                output += "- Duration: \(String(format: "%.2f", duration))s\n"
+            } else {
+                output += "- Duration: N/A\n"
+            }
+            
+            // File count
+            output += "- File count: \(formatNumber(metrics.fileCount))\n"
+            
+            // Total size (human-readable format, deterministic from bytes)
+            let totalSizeFormatted = formatSizeBytes(metrics.totalSizeBytes)
+            output += "- Total size: \(totalSizeFormatted)\n"
+            
+            // Hash coverage (may be nil)
+            if let coverage = metrics.hashCoveragePercent {
+                output += "- Hash coverage: \(String(format: "%.1f", coverage))%\n"
+            } else {
+                output += "- Hash coverage: N/A\n"
+            }
+        } else {
+            // Scale metrics not available
+            output += "Performance: N/A (baseline index not available)\n"
+        }
+        
         return output
+    }
+    
+    /// Formats bytes to human-readable size (uses shared helper)
+    private func formatSizeBytes(_ bytes: Int64) -> String {
+        // Call the global formatSizeBytes function
+        return MediaHubCLI.formatSizeBytes(bytes)
     }
     
     private func formatJSON() -> String {
@@ -483,6 +602,7 @@ struct StatusFormatter: OutputFormatter {
             let sources: [SourceInfo]
             let statistics: StatisticsInfo?
             let hashCoverage: HashCoverageInfo?
+            let performance: PerformanceJSON?
         }
         
         let statisticsInfo: StatisticsInfo?
@@ -509,6 +629,9 @@ struct StatusFormatter: OutputFormatter {
         
         let sourceInfos = sources.map { SourceInfo(from: $0) }
         
+        // Create performance object (optional, omitted if scaleMetrics unavailable)
+        let performanceJSON = PerformanceJSON(scaleMetrics: scaleMetrics, durationSeconds: durationSeconds)
+        
         let statusInfo = StatusInfo(
             path: library.rootURL.path,
             identifier: library.metadata.libraryId,
@@ -516,7 +639,8 @@ struct StatusFormatter: OutputFormatter {
             sourceCount: sources.count,
             sources: sourceInfos,
             statistics: statisticsInfo,
-            hashCoverage: hashCoverageInfo
+            hashCoverage: hashCoverageInfo,
+            performance: performanceJSON
         )
         
         guard let data = try? encoder.encode(statusInfo),
@@ -645,6 +769,8 @@ struct HashCoverageFormatter: OutputFormatter {
     let indexUpdated: Bool?
     let limit: Int?
     let outputFormat: OutputFormat
+    let scaleMetrics: ScaleMetrics?
+    let durationSeconds: Double?
     
     func format() -> String {
         switch outputFormat {
@@ -672,6 +798,12 @@ struct HashCoverageFormatter: OutputFormatter {
                 output += "  Note: \(statistics.missingFilesCount) entry/entries reference missing files\n"
             }
             output += "\nNo hashes will be computed. No changes will be made to the index."
+            
+            // Append Performance section (human-readable only)
+            if outputFormat == .humanReadable {
+                output += formatPerformanceSection(scaleMetrics: scaleMetrics, durationSeconds: durationSeconds)
+            }
+            
             return output
         } else {
             var output = "Hash Coverage Update Summary\n"
@@ -715,6 +847,12 @@ struct HashCoverageFormatter: OutputFormatter {
                     output += "  (Limited to \(limit) files)\n"
                 }
             }
+            
+            // Append Performance section (human-readable only)
+            if outputFormat == .humanReadable {
+                output += formatPerformanceSection(scaleMetrics: scaleMetrics, durationSeconds: durationSeconds)
+            }
+            
             return output
         }
     }
@@ -729,6 +867,7 @@ struct HashCoverageFormatter: OutputFormatter {
                 let library: String
                 let statistics: HashCoverageStatisticsJSON
                 let limit: Int?
+                let performance: PerformanceJSON?
             }
             
             struct HashCoverageStatisticsJSON: Codable {
@@ -749,11 +888,15 @@ struct HashCoverageFormatter: OutputFormatter {
                 hashCoverage: statistics.hashCoverage
             )
             
+            // Create performance object (optional, omitted if scaleMetrics unavailable)
+            let performanceJSON = PerformanceJSON(scaleMetrics: scaleMetrics, durationSeconds: durationSeconds)
+            
             let output = DryRunOutput(
                 dryRun: true,
                 library: libraryPath,
                 statistics: statsJSON,
-                limit: limit
+                limit: limit,
+                performance: performanceJSON
             )
             
             guard let data = try? encoder.encode(output),
@@ -771,6 +914,7 @@ struct HashCoverageFormatter: OutputFormatter {
                 let entriesUpdated: Int?
                 let indexUpdated: Bool?
                 let limit: Int?
+                let performance: PerformanceJSON?
             }
             
             struct HashCoverageStatisticsJSON: Codable {
@@ -801,6 +945,9 @@ struct HashCoverageFormatter: OutputFormatter {
                 afterJSON = nil
             }
             
+            // Create performance object (optional, omitted if scaleMetrics unavailable)
+            let performanceJSON = PerformanceJSON(scaleMetrics: scaleMetrics, durationSeconds: durationSeconds)
+            
             let output = UpdateOutput(
                 library: libraryPath,
                 before: beforeJSON,
@@ -809,7 +956,8 @@ struct HashCoverageFormatter: OutputFormatter {
                 hashFailures: hashFailures,
                 entriesUpdated: entriesUpdated,
                 indexUpdated: indexUpdated,
-                limit: limit
+                limit: limit,
+                performance: performanceJSON
             )
             
             guard let data = try? encoder.encode(output),
@@ -834,6 +982,8 @@ struct DuplicateReportFormatter: OutputFormatter {
     let groups: [DuplicateGroup]
     let summary: DuplicateSummary
     let outputFormat: DuplicateReportFormat
+    let scaleMetrics: ScaleMetrics?
+    let durationSeconds: Double?
     
     func format() -> String {
         switch outputFormat {
@@ -860,6 +1010,12 @@ struct DuplicateReportFormatter: OutputFormatter {
         
         if groups.isEmpty {
             output += "No duplicates found.\n"
+            
+            // Append Performance section even when no duplicates (text format only)
+            if outputFormat == .text {
+                output += formatPerformanceSection(scaleMetrics: scaleMetrics, durationSeconds: durationSeconds)
+            }
+            
             return output
         }
         
@@ -891,6 +1047,11 @@ struct DuplicateReportFormatter: OutputFormatter {
         let savingsMB = formatSizeBytes(summary.potentialSavingsBytes)
         output += "- Potential space savings: ~\(savingsMB) (keep 1 copy per group)\n"
         
+        // Append Performance section (text format only, not JSON/CSV)
+        if outputFormat == .text {
+            output += formatPerformanceSection(scaleMetrics: scaleMetrics, durationSeconds: durationSeconds)
+        }
+        
         return output
     }
     
@@ -909,6 +1070,7 @@ struct DuplicateReportFormatter: OutputFormatter {
             let generated: String
             let summary: SummaryJSON
             let groups: [GroupJSON]
+            let performance: PerformanceJSON?
         }
         
         struct SummaryJSON: Codable {
@@ -930,6 +1092,9 @@ struct DuplicateReportFormatter: OutputFormatter {
             let sizeBytes: Int64
             let timestamp: String
         }
+        
+        // Create performance object (optional, omitted if scaleMetrics unavailable)
+        let performanceJSON = PerformanceJSON(scaleMetrics: scaleMetrics, durationSeconds: durationSeconds)
         
         let report = DuplicateReportJSON(
             library: libraryName,
@@ -953,7 +1118,8 @@ struct DuplicateReportFormatter: OutputFormatter {
                         )
                     }
                 )
-            }
+            },
+            performance: performanceJSON
         )
         
         guard let data = try? encoder.encode(report),
@@ -983,14 +1149,10 @@ struct DuplicateReportFormatter: OutputFormatter {
         return output
     }
     
-    /// Formats bytes to human-readable size (MB)
+    /// Formats bytes to human-readable size (uses shared helper)
     private func formatSizeBytes(_ bytes: Int64) -> String {
-        let mb = Double(bytes) / (1024.0 * 1024.0)
-        if mb < 0.1 {
-            return String(format: "%.0f bytes", Double(bytes))
-        } else {
-            return String(format: "%.1f MB", mb)
-        }
+        // Call the global formatSizeBytes function
+        return MediaHubCLI.formatSizeBytes(bytes)
     }
     
     /// Formats ISO8601 timestamp to readable format

@@ -7,6 +7,7 @@
 
 import XCTest
 @testable import MediaHub
+@testable import MediaHubCLI
 
 final class HashCoverageMaintenanceTests: XCTestCase {
     var tempDirectory: URL!
@@ -539,5 +540,246 @@ final class HashCoverageMaintenanceTests: XCTestCase {
         let loadedIndex = try BaselineIndexReader.load(from: indexPath)
         XCTAssertEqual(loadedIndex.entries[0].hash, existingHash, "Existing hash should be preserved, not overwritten")
         XCTAssertNotEqual(loadedIndex.entries[0].hash, differentHash, "Computed hash should not overwrite existing hash")
+    }
+    
+    // MARK: - Performance Section Tests
+    
+    func testHashCoverageFormatterPerformanceSectionInHumanReadable() throws {
+        // Create index with entries
+        let entries = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 1000, mtime: "2024-01-01T00:00:00Z", hash: "sha256:abc123"),
+            IndexEntry(path: "2024/01/file2.jpg", size: 2000, mtime: "2024-01-02T00:00:00Z", hash: nil)
+        ]
+        let index = BaselineIndex(entries: entries)
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRoot)
+        try BaselineIndexWriter.write(index, to: indexPath, libraryRoot: libraryRoot)
+        
+        // Create statistics
+        let statistics = HashCoverageStatistics(
+            totalEntries: 2,
+            entriesWithHash: 1,
+            entriesMissingHash: 1,
+            candidateCount: 1,
+            missingFilesCount: 0,
+            hashCoverage: 0.5
+        )
+        
+        // Create scale metrics
+        let scaleMetrics = ScaleMetricsComputer.compute(from: index)
+        
+        // Format dry-run output with performance metrics
+        let formatter = HashCoverageFormatter(
+            libraryPath: libraryRoot,
+            statistics: statistics,
+            dryRun: true,
+            hashesComputed: nil,
+            hashFailures: nil,
+            entriesUpdated: nil,
+            indexUpdated: nil,
+            limit: nil,
+            outputFormat: .humanReadable,
+            scaleMetrics: scaleMetrics,
+            durationSeconds: 0.123
+        )
+        let output = formatter.format()
+        
+        // Verify Performance section is present
+        XCTAssertTrue(output.contains("Performance"), "Performance section should be present")
+        XCTAssertTrue(output.contains("Duration:"), "Duration should be present")
+        XCTAssertTrue(output.contains("File count:"), "File count should be present")
+        XCTAssertTrue(output.contains("Total size:"), "Total size should be present")
+        XCTAssertTrue(output.contains("Hash coverage:"), "Hash coverage should be present")
+        
+        // Verify existing content is preserved
+        XCTAssertTrue(output.contains("Hash Coverage Preview"), "Existing header should be preserved")
+        XCTAssertTrue(output.contains("Total entries:"), "Existing statistics should be preserved")
+    }
+    
+    func testHashCoverageFormatterPerformanceSectionNotInJSON() throws {
+        // Create statistics
+        let statistics = HashCoverageStatistics(
+            totalEntries: 2,
+            entriesWithHash: 1,
+            entriesMissingHash: 1,
+            candidateCount: 1,
+            missingFilesCount: 0,
+            hashCoverage: 0.5
+        )
+        
+        let scaleMetrics = ScaleMetrics(
+            fileCount: 2,
+            totalSizeBytes: 3000,
+            hashCoveragePercent: 50.0
+        )
+        
+        // Format JSON output with performance metrics
+        let formatter = HashCoverageFormatter(
+            libraryPath: libraryRoot,
+            statistics: statistics,
+            dryRun: true,
+            hashesComputed: nil,
+            hashFailures: nil,
+            entriesUpdated: nil,
+            indexUpdated: nil,
+            limit: nil,
+            outputFormat: .json,
+            scaleMetrics: scaleMetrics,
+            durationSeconds: 0.123
+        )
+        let output = formatter.format()
+        
+        // Verify Performance section is NOT in JSON
+        XCTAssertFalse(output.contains("Performance"), "Performance section should not be in JSON output")
+        XCTAssertFalse(output.contains("Duration:"), "Duration should not be in JSON output")
+        
+        // Verify JSON is still valid
+        let jsonData = output.data(using: String.Encoding.utf8)!
+        let json = try JSONSerialization.jsonObject(with: jsonData) as! [String: Any]
+        XCTAssertNotNil(json["library"], "JSON should still be valid")
+    }
+    
+    func testHashCoverageFormatterPerformanceSectionNAWhenIndexMissing() throws {
+        // Create statistics
+        let statistics = HashCoverageStatistics(
+            totalEntries: 0,
+            entriesWithHash: 0,
+            entriesMissingHash: 0,
+            candidateCount: 0,
+            missingFilesCount: 0,
+            hashCoverage: 0.0
+        )
+        
+        // Format without scale metrics (index missing)
+        let formatter = HashCoverageFormatter(
+            libraryPath: libraryRoot,
+            statistics: statistics,
+            dryRun: true,
+            hashesComputed: nil,
+            hashFailures: nil,
+            entriesUpdated: nil,
+            indexUpdated: nil,
+            limit: nil,
+            outputFormat: .humanReadable,
+            scaleMetrics: nil,
+            durationSeconds: nil
+        )
+        let output = formatter.format()
+        
+        // Verify Performance section shows N/A
+        XCTAssertTrue(output.contains("Performance"), "Performance section should be present")
+        XCTAssertTrue(output.contains("Performance: N/A (baseline index not available)"), "Performance should show N/A when index missing")
+        
+        // Verify existing content is preserved
+        XCTAssertTrue(output.contains("Hash Coverage Preview"), "Existing header should be preserved")
+    }
+    
+    // MARK: - JSON Performance Object Tests
+    
+    func testHashCoverageFormatterJSONIncludesPerformance() throws {
+        // Create index with entries
+        let entries = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 1000, mtime: "2024-01-01T00:00:00Z", hash: "sha256:abc123"),
+            IndexEntry(path: "2024/01/file2.jpg", size: 2000, mtime: "2024-01-02T00:00:00Z", hash: nil)
+        ]
+        let index = BaselineIndex(entries: entries)
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRoot)
+        try BaselineIndexWriter.write(index, to: indexPath, libraryRoot: libraryRoot)
+        
+        // Create statistics
+        let statistics = HashCoverageStatistics(
+            totalEntries: 2,
+            entriesWithHash: 1,
+            entriesMissingHash: 1,
+            candidateCount: 1,
+            missingFilesCount: 0,
+            hashCoverage: 0.5
+        )
+        
+        // Create scale metrics
+        let scaleMetrics = ScaleMetricsComputer.compute(from: index)
+        
+        // Format JSON output with performance metrics
+        let formatter = HashCoverageFormatter(
+            libraryPath: libraryRoot,
+            statistics: statistics,
+            dryRun: true,
+            hashesComputed: nil,
+            hashFailures: nil,
+            entriesUpdated: nil,
+            indexUpdated: nil,
+            limit: nil,
+            outputFormat: .json,
+            scaleMetrics: scaleMetrics,
+            durationSeconds: 0.123
+        )
+        let jsonString = formatter.format()
+        
+        // Verify JSON is valid and parseable
+        let jsonData = jsonString.data(using: String.Encoding.utf8)!
+        let json = try JSONSerialization.jsonObject(with: jsonData) as! [String: Any]
+        
+        // Verify performance field is present
+        XCTAssertNotNil(json["performance"], "performance field should be present when scaleMetrics available")
+        let performance = json["performance"] as! [String: Any]
+        
+        // Verify performance structure
+        if let duration = performance["durationSeconds"] as? Double {
+            XCTAssertGreaterThanOrEqual(duration, 0.0, "durationSeconds should be non-negative")
+        } else {
+            XCTAssertNil(performance["durationSeconds"], "durationSeconds may be null")
+        }
+        
+        XCTAssertNotNil(performance["scale"], "scale object should be present")
+        let scale = performance["scale"] as! [String: Any]
+        XCTAssertEqual(scale["fileCount"] as! Int, 2, "fileCount should match")
+        XCTAssertEqual(scale["totalSizeBytes"] as! Int64, 3000, "totalSizeBytes should match")
+        
+        // Verify no "Performance" text appears in JSON
+        XCTAssertFalse(jsonString.contains("Performance\n"), "Performance section text should not appear in JSON output")
+        XCTAssertFalse(jsonString.contains("Duration:"), "Duration label should not appear in JSON output")
+        
+        // Verify existing fields are preserved
+        XCTAssertNotNil(json["dryRun"], "Existing fields should be preserved")
+        XCTAssertNotNil(json["library"], "Existing fields should be preserved")
+    }
+    
+    func testHashCoverageFormatterJSONOmitsPerformanceWhenIndexMissing() throws {
+        // Create statistics
+        let statistics = HashCoverageStatistics(
+            totalEntries: 0,
+            entriesWithHash: 0,
+            entriesMissingHash: 0,
+            candidateCount: 0,
+            missingFilesCount: 0,
+            hashCoverage: 0.0
+        )
+        
+        // Format JSON without scale metrics (index missing)
+        let formatter = HashCoverageFormatter(
+            libraryPath: libraryRoot,
+            statistics: statistics,
+            dryRun: true,
+            hashesComputed: nil,
+            hashFailures: nil,
+            entriesUpdated: nil,
+            indexUpdated: nil,
+            limit: nil,
+            outputFormat: .json,
+            scaleMetrics: nil,
+            durationSeconds: nil
+        )
+        let jsonString = formatter.format()
+        
+        // Verify JSON is valid
+        let jsonData = jsonString.data(using: String.Encoding.utf8)!
+        let json = try JSONSerialization.jsonObject(with: jsonData) as! [String: Any]
+        
+        // Verify performance field is omitted (not null)
+        XCTAssertNil(json["performance"], "performance field should be omitted when scaleMetrics unavailable")
+        XCTAssertFalse(jsonString.contains("\"performance\""), "performance should not be present in JSON string")
+        
+        // Verify existing fields are preserved
+        XCTAssertNotNil(json["dryRun"], "Existing fields should be preserved")
+        XCTAssertNotNil(json["library"], "Existing fields should be preserved")
     }
 }

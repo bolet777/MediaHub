@@ -176,6 +176,21 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 - Edge case handling: nil hashes skipped silently, empty reports supported, unwritable paths fail early
 - CLI integration: `--format` option (text/json/csv), `--output` option for file output, minimal stdout feedback when writing to file
 
+### ✅ Slice 9c — Performance & Scale Observability
+**Status**: Complete and validated (2026-01-16)  
+**Spec**: `specs/009c-performance-scale-guardrails/spec.md`  
+**Validation**: `specs/009c-performance-scale-guardrails/validation.md`
+
+**Deliverables**:
+- Performance measurement for `mediahub status`, `mediahub index hash`, and `mediahub duplicates` commands
+- Scale metrics reporting: file count, total size bytes, hash coverage percent (deterministic)
+- Duration measurement (informational, may vary)
+- Human-readable Performance section appended to command outputs
+- JSON `performance` object (additive, optional) with `durationSeconds` and `scale` metrics
+- Read-only operations: no index or filesystem mutations during measurement
+- Deterministic scale metrics: identical values across multiple runs for same library state
+- Graceful degradation: Performance section shows "N/A" when baseline index is missing/invalid
+
 #### Follow-ups / Watchlist (non-blocking)
 
 - **[FOLLOW-UP] JSON explicitness for mediaTypes**: Decide if public JSON should always include `mediaTypes` explicitly vs omit when nil (persistence can omit). Currently: `source list`/`status` JSON always include `mediaTypes` via wrapper; confirm consistency across all JSON surfaces. *Suggested location: Future JSON schema review or Slice 11+ (UI integration)*
@@ -199,7 +214,7 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 | Slice | Title | Goal | Pillar | Depends on | Track | Status |
 |-------|-------|------|--------|------------|-------|--------|
 | 9b | Duplicate Reporting & Audit | Provide comprehensive duplicate reporting and audit capabilities to help users understand duplicate content across sources and libraries | Content Integrity & Deduplication | Slice 8, Slice 9 | Core / CLI | ✅ Complete |
-| 9c | Performance & Scale Guardrails | Establish performance benchmarks, scale testing, and guardrails to ensure MediaHub maintains acceptable performance as libraries grow | Scalability & Performance | Slice 8 | Core / CLI | Proposed |
+| 9c | Performance & Scale Observability | Establish performance benchmarks, scale testing, and guardrails to ensure MediaHub maintains acceptable performance as libraries grow | Scalability & Performance | Slice 8 | Core / CLI | ✅ Complete |
 | 11 | UI Shell v1 + Library Discovery | Basic SwiftUI app with home screen, sidebar libraries, and library discovery/selection | User Experience & Safety | Slice 1 | UI | Proposed |
 | 12 | UI Create / Adopt Wizard v1 | Unified wizard for library creation and adoption with preview dry-run and explicit confirmation | User Experience & Safety | Slice 1, Slice 6 | UI | Proposed |
 | 13 | UI Sources + Detect + Import (P1) | Source management (attach/detach with media types), detect preview/run, and import preview/confirm/run workflows | User Experience & Safety | Slice 2, Slice 3, Slice 10 | UI | Proposed |

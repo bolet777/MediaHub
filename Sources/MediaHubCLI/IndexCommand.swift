@@ -50,11 +50,18 @@ struct IndexHashCommand: ParsableCommand {
             let libraryPath = try LibraryContext.requireLibraryPath(from: nil)
             
             do {
-                // Select candidates (read-only, no hash computation, no writes)
-                let result = try HashCoverageMaintenance.selectCandidates(
-                    libraryRoot: libraryPath,
-                    limit: limit
-                )
+                // Measure duration and select candidates (read-only, no hash computation, no writes)
+                let measurement = try DurationMeasurement.measure {
+                    try HashCoverageMaintenance.selectCandidates(
+                        libraryRoot: libraryPath,
+                        limit: limit
+                    )
+                }
+                let result = measurement.result
+                let durationSeconds = measurement.durationSeconds
+                
+                // Compute scale metrics (best-effort, may be nil if index is missing/invalid)
+                let scaleMetrics = ScaleMetricsComputer.compute(for: libraryPath)
                 
                 // Display dry-run summary
                 let formatter = HashCoverageFormatter(
@@ -66,7 +73,9 @@ struct IndexHashCommand: ParsableCommand {
                     entriesUpdated: nil,
                     indexUpdated: nil,
                     limit: limit,
-                    outputFormat: json ? .json : .humanReadable
+                    outputFormat: json ? .json : .humanReadable,
+                    scaleMetrics: scaleMetrics,
+                    durationSeconds: durationSeconds
                 )
                 print(formatter.format())
             } catch let error as HashCoverageMaintenanceError {
@@ -114,17 +123,27 @@ struct IndexHashCommand: ParsableCommand {
             }
             
             do {
-                // Compute missing hashes
-                let computationResult = try HashCoverageMaintenance.computeMissingHashes(
-                    libraryRoot: libraryPath,
-                    limit: limit
-                )
+                // Measure duration and compute missing hashes
+                let measurement = try DurationMeasurement.measure {
+                    // Compute missing hashes
+                    let computationResult = try HashCoverageMaintenance.computeMissingHashes(
+                        libraryRoot: libraryPath,
+                        limit: limit
+                    )
+                    
+                    // Apply computed hashes and write index atomically
+                    let updateResult = try HashCoverageMaintenance.applyComputedHashesAndWriteIndex(
+                        libraryRoot: libraryPath,
+                        computedHashes: computationResult.computedHashes
+                    )
+                    
+                    return (computationResult, updateResult)
+                }
+                let (computationResult, updateResult) = measurement.result
+                let durationSeconds = measurement.durationSeconds
                 
-                // Apply computed hashes and write index atomically
-                let updateResult = try HashCoverageMaintenance.applyComputedHashesAndWriteIndex(
-                    libraryRoot: libraryPath,
-                    computedHashes: computationResult.computedHashes
-                )
+                // Compute scale metrics (best-effort, may be nil if index is missing/invalid)
+                let scaleMetrics = ScaleMetricsComputer.compute(for: libraryPath)
                 
                 // Display summary
                 let formatter = HashCoverageFormatter(
@@ -136,7 +155,9 @@ struct IndexHashCommand: ParsableCommand {
                     entriesUpdated: updateResult.entriesUpdated,
                     indexUpdated: updateResult.indexUpdated,
                     limit: limit,
-                    outputFormat: json ? .json : .humanReadable
+                    outputFormat: json ? .json : .humanReadable,
+                    scaleMetrics: scaleMetrics,
+                    durationSeconds: durationSeconds
                 )
                 print(formatter.format())
             } catch let error as HashCoverageMaintenanceError {
