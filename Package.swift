@@ -36,7 +36,8 @@ let package = Package(
             name: "MediaHubUI",
             dependencies: [
                 "MediaHub",
-            ]),
+            ],
+            resources: [.process("Assets.xcassets")]),
         .testTarget(
             name: "MediaHubTests",
             dependencies: [
