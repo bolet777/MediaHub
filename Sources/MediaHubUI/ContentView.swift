@@ -121,8 +121,14 @@ struct ContentView: View {
         // Find the library by path
         if let library = appState.discoveredLibraries.first(where: { $0.path == path }) {
             if library.isValid {
-                appState.selectedLibraryPath = library.path
-                appState.errorMessage = nil
+                // Validate the selected library path
+                if let validationError = LibraryPathValidator.validateSelectedLibraryPath(path) {
+                    appState.selectedLibraryPath = nil
+                    appState.errorMessage = validationError
+                } else {
+                    appState.selectedLibraryPath = path
+                    appState.errorMessage = nil
+                }
             } else {
                 appState.selectedLibraryPath = nil
                 appState.errorMessage = library.validationError ?? "This library is invalid (unreadable or malformed .mediahub/library.json)."
