@@ -3,7 +3,7 @@
 **Document Type**: Project Status & Roadmap Tracking  
 **Purpose**: Memory of project state, decisions, and planned slices  
 **Last Updated**: 2026-01-27  
-**Next Review**: After Slice 9 or after real-world usage  
+**Next Review**: After Slice 12 planning or after real-world usage  
 **Note**: This is a tracking document, not a normative specification. For authoritative specs, see individual slice specifications in `specs/`.
 
 ---
@@ -224,9 +224,6 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 
 | Slice | Title | Goal | Pillar | Depends on | Track | Status |
 |-------|-------|------|--------|------------|-------|--------|
-| 9b | Duplicate Reporting & Audit | Provide comprehensive duplicate reporting and audit capabilities to help users understand duplicate content across sources and libraries | Content Integrity & Deduplication | Slice 8, Slice 9 | Core / CLI | ✅ Complete |
-| 9c | Performance & Scale Observability | Establish performance benchmarks, scale testing, and guardrails to ensure MediaHub maintains acceptable performance as libraries grow | Scalability & Performance | Slice 8 | Core / CLI | ✅ Complete |
-| 11 | UI Shell v1 + Library Discovery | Basic SwiftUI app with home screen, sidebar libraries, and library discovery/selection | User Experience & Safety | Slice 1 | UI | ✅ Complete |
 | 12 | UI Create / Adopt Wizard v1 | Unified wizard for library creation and adoption with preview dry-run and explicit confirmation | User Experience & Safety | Slice 1, Slice 6 | UI | Proposed |
 | 13 | UI Sources + Detect + Import (P1) | Source management (attach/detach with media types), detect preview/run, and import preview/confirm/run workflows | User Experience & Safety | Slice 2, Slice 3, Slice 10 | UI | Proposed |
 | 14 | Progress + Cancel API minimale | Add progress reporting and cancellation support to core operations (detect, import, hash) | Reliability & Maintainability | None | Core / CLI | Proposed |
@@ -237,12 +234,8 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 
 ### Desktop App Track (Macro)
 
-The desktop application is treated as a separate macro track.
-It orchestrates existing CLI workflows (library, sources, detect, import, status)
-but does not introduce new business logic.
-
-Desktop UI slices will be tracked separately once the CLI backend is considered
-functionally complete and stable.
+The desktop application (UI slices 11–18) orchestrates existing CLI workflows (library, sources, detect, import, status)
+but does not introduce new business logic. UI slices are tracked in the Planned Slices table above.
 
 ---
 

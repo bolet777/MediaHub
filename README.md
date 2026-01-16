@@ -98,7 +98,33 @@ The MediaHub core is fully implemented, tested, and validated through the follow
   - Hash computation and storage during import
   - Hash-based duplicate detection during detect
 
-All eight slices are frozen and covered by automated validation.
+- **Slice 9 — Hash Coverage & Maintenance**
+  - `mediahub index hash` command for computing missing hashes
+  - Incremental and idempotent hash computation
+  - Hash coverage reporting in status command
+
+- **Slice 9b — Duplicate Reporting & Audit**
+  - `mediahub duplicates` command for duplicate file reporting
+  - Multiple output formats (text, JSON, CSV)
+  - Deterministic ordering and read-only operations
+
+- **Slice 9c — Performance & Scale Observability**
+  - Performance measurement for status, index hash, and duplicates commands
+  - Scale metrics reporting (file count, total size, hash coverage)
+  - Graceful degradation when baseline index is missing
+
+- **Slice 10 — Source Media Types + Library Statistics**
+  - Source media type filtering (images, videos, both)
+  - Library statistics computation (total items, by year, by media type)
+  - Status command integration with statistics display
+
+- **Slice 11 — UI Shell v1 + Library Discovery**
+  - SwiftPM MediaHubUI app shell (SwiftUI macOS application)
+  - Folder-based library discovery (read-only, deterministic order)
+  - Library opening via Core APIs + StatusView display
+  - Error handling and moved/deleted library detection
+
+All slices through 11 are frozen and covered by automated validation.
 
 ---
 
@@ -182,13 +208,20 @@ MediaHub/
 │   │   ├── CollisionHandling.swift
 │   │   ├── AtomicFileCopy.swift
 │   │   └── KnownItemsTracking.swift
-│   └── MediaHubCLI/                 # Slice 4: CLI tool
-│       ├── main.swift
-│       ├── LibraryCommand.swift
-│       ├── SourceCommand.swift
-│       ├── DetectCommand.swift
-│       ├── ImportCommand.swift
-│       ├── StatusCommand.swift
+│   ├── MediaHubCLI/                 # Slice 4: CLI tool
+│   │   ├── main.swift
+│   │   ├── LibraryCommand.swift
+│   │   ├── SourceCommand.swift
+│   │   ├── DetectCommand.swift
+│   │   ├── ImportCommand.swift
+│   │   ├── StatusCommand.swift
+│   │   └── ...
+│   └── MediaHubUI/                  # Slice 11: SwiftUI macOS app
+│       ├── MediaHubUIApp.swift
+│       ├── ContentView.swift
+│       ├── AppState.swift
+│       ├── LibraryDiscoveryService.swift
+│       ├── StatusView.swift
 │       └── ...
 ├── Tests/
 │   └── MediaHubTests/               # Unit & integration tests (100+)
@@ -231,10 +264,10 @@ swift test
 
 ---
 
-## Explicitly Out of Scope (As of Slice 8)
+## Explicitly Out of Scope (As of Slice 11)
 
 - Photos.app or device‑specific integrations
-- UI-driven business logic (the desktop UI is planned; business logic stays in core/CLI)
+- UI-driven business logic (the desktop UI orchestrates CLI workflows; business logic stays in core/CLI)
 - Metadata enrichment (tags, faces, albums)
 - Pipelines, automation, or scheduling
 - Cloud sync or backup features
@@ -253,7 +286,7 @@ A transparent, safety-first macOS desktop app for importing, organizing, auditin
 - **Auditability**: explainable decisions, reportable outputs, traceable state.
 - **Desktop Experience**: a modern macOS UI that uses the CLI/core as a backend.
 
-### Completed Slices (1–8)
+### Completed Slices (1–11)
 - ✅ Slice 1: Library Entity & Identity
 - ✅ Slice 2: Sources & Import Detection
 - ✅ Slice 3: Import Execution & Media Organization
@@ -262,22 +295,24 @@ A transparent, safety-first macOS desktop app for importing, organizing, auditin
 - ✅ Slice 6: Library Adoption
 - ✅ Slice 7: Baseline Index
 - ✅ Slice 8: Advanced Hashing & Deduplication
+- ✅ Slice 9: Hash Coverage & Maintenance
+- ✅ Slice 9b: Duplicate Reporting & Audit
+- ✅ Slice 9c: Performance & Scale Observability
+- ✅ Slice 10: Source Media Types + Library Statistics
+- ✅ Slice 11: UI Shell v1 + Library Discovery
 
 ### Planned Slices (Next)
-- ▶️ **Slice 9 — Hash Coverage & Maintenance**
-  - Add `mediahub index hash [--dry-run] [--limit N] [--yes]` to compute missing hashes for existing library files.
-  - Integrate hash coverage reporting into `mediahub status`.
-  - Batch/incremental/idempotent; no deletion/merge.
+- ▶️ **Slice 12 — UI Create / Adopt Wizard v1**
+  - Unified wizard for library creation and adoption with preview dry-run and explicit confirmation
 
-- ▶️ **Slice 9b — Duplicate Reporting & Audit**
-  - Report duplicate groups by hash; export JSON/CSV for human review.
+- ▶️ **Slice 13 — UI Sources + Detect + Import (P1)**
+  - Source management (attach/detach with media types), detect preview/run, and import preview/confirm/run workflows
 
-- ▶️ **Slice 9c — Performance & Scale Guardrails**
-  - Benchmarks, regression guardrails, and operational limits for very large libraries.
+- ▶️ **Slice 14 — Progress + Cancel API minimale**
+  - Add progress reporting and cancellation support to core operations (detect, import, hash)
 
-- ▶️ **Desktop App Track (Macro Epic)**
-  - UI shell that orchestrates the same workflows as the CLI (libraries, sources, detect, import, status).
-  - No business logic in UI; core remains the source of truth.
+- ▶️ **Slice 15 — UI Operations UX (progress / cancel)**
+  - Progress bars, step indicators, and cancellation UI for detect/import/hash operations
 
 For detailed status and per-slice validation, see `specs/STATUS.md`.
 
