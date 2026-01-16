@@ -21,7 +21,7 @@ struct ContentView: View {
                     Text("Discovering…")
                         .foregroundColor(.secondary)
                         .padding(.horizontal)
-                } else if appState.discoveredLibraries.isEmpty && appState.discoveryRootPath != nil {
+                } else if appState.discoveredLibraries.isEmpty && appState.discoveryRootPath != nil && appState.errorMessage == nil {
                     Text("(No libraries found)")
                         .foregroundColor(.secondary)
                         .padding(.horizontal)
@@ -78,19 +78,35 @@ struct ContentView: View {
         
         if panel.runModal() == .OK, let url = panel.url {
             let path = url.path
+            // Clear selection and previous results when starting new discovery
+            appState.selectedLibraryPath = nil
+            appState.discoveredLibraries = []
+            appState.errorMessage = nil
             appState.discoveryRootPath = path
             appState.isDiscovering = true
-            appState.errorMessage = nil
             
-            Task { @MainActor in
+            Task {
                 do {
-                    let libraries = try LibraryDiscoveryService.scanFolder(at: path)
-                    appState.discoveredLibraries = libraries
-                    appState.isDiscovering = false
+                    // Run discovery off the main actor to avoid blocking the UI.
+                    let libraries = try await Task.detached {
+                        try LibraryDiscoveryService.scanFolder(at: path)
+                    }.value
+
+                    await MainActor.run {
+                        appState.discoveredLibraries = libraries
+                        appState.isDiscovering = false
+                    }
                 } catch {
-                    appState.errorMessage = "Failed to discover libraries: \(error.localizedDescription)"
-                    appState.discoveredLibraries = []
-                    appState.isDiscovering = false
+                    await MainActor.run {
+                        if let discoveryError = error as? DiscoveryError,
+                           case .rootPathNotAccessible = discoveryError {
+                            appState.errorMessage = "Cannot access this folder. Please choose a readable folder."
+                        } else {
+                            appState.errorMessage = "Failed to discover libraries: \(error.localizedDescription)"
+                        }
+                        appState.discoveredLibraries = []
+                        appState.isDiscovering = false
+                    }
                 }
             }
         }
@@ -109,7 +125,7 @@ struct ContentView: View {
                 appState.errorMessage = nil
             } else {
                 appState.selectedLibraryPath = nil
-                appState.errorMessage = library.validationError ?? "This library is invalid"
+                appState.errorMessage = library.validationError ?? "This library is invalid (unreadable or malformed .mediahub/library.json)."
             }
         }
     }
