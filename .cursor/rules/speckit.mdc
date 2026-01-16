@@ -1,0 +1,188 @@
+---
+alwaysApply: true
+---
+You are working on the MediaHub project.
+
+These rules are NON-NEGOTIABLE and apply to all work in this repository.
+
+---
+
+## Global Rules
+
+- All development is slice-based using Spec-Kit:
+  spec.md → plan.md → tasks.md → validation.md → implementation → review → freeze
+- No code may be written before spec, plan, tasks, and validation are approved.
+- Always output explicit OK / KO decisions when reviewing work.
+- Prefer minimal, additive changes over refactors.
+- Enforce determinism and idempotence.
+- Never invent new CLI commands or flags unless explicitly required by the slice.
+
+---
+
+## Safety Rules
+
+- Read-only by default.
+- Never overwrite or mutate user data.
+- Backward compatibility is mandatory.
+- Writes must be guarded and atomic.
+- Avoid scope creep at all times.
+
+---
+
+## UI Rules (MediaHubUI)
+
+- The UI is a read-only orchestrator.
+- No business logic in the UI.
+- UI must call Core APIs, not invoke the CLI binary.
+- No filesystem mutations from UI.
+- Long-running work must not run on MainActor.
+- Errors must be user-facing, stable, and actionable.
+- Status semantics must match CLI semantically, not structurally (same values, not exact JSON schema).
+
+---
+
+## Before Starting or Continuing a Slice
+
+You MUST read:
+- docs/AI_CONTEXT.md
+- specs/STATUS.md
+
+If a previous slice exists, also read:
+- specs/<previous-slice>/spec.md
+- specs/<previous-slice>/plan.md
+- specs/<previous-slice>/tasks.md
+- specs/<previous-slice>/validation.md
+
+---
+
+## Starting a New Slice
+
+When asked to start a new slice:
+- Propose 2–3 slice themes consistent with STATUS.md.
+- Wait for explicit human choice.
+- Generate the spec using the `/speckit.spec` command (or equivalent Spec-Kit workflow).
+- **Alternative**: Use `/speckit.start` to automate the complete workflow (spec → plan → tasks → validation) with automatic reviews and fixes.
+- Never skip Spec-Kit phases.
+
+---
+
+## Implementation Behavior
+
+- Implement ONLY what is in the active slice.
+- Do NOT anticipate future slices.
+- Do NOT mix phases.
+- Do NOT introduce new data models or flags unless scoped.
+- Use SAFE passes: one logical zone at a time, 1–2 commands max per pass (swift build, swift test).
+- Always provide the next prompt (e.g., "Next: run `/speckit.implement T-001`" or "Next: commit these changes").
+
+### SAFE Pass Details
+
+- Read-only first (dry-run, in-memory operations)
+- Writes only after guards are in place
+- Atomic writes only (write → rename pattern)
+- Determinism and idempotence are mandatory
+- Default to the safest, smallest, most reversible option
+
+---
+
+## Iteration Protocol
+
+When reviewing work or responding to user feedback:
+- Always output explicit **OK / KO** decisions
+- If OK: provide the next prompt (e.g., "Next: run `/speckit.implement T-001`" or "Next: commit these changes")
+- If KO: provide minimal realignment prompt (what needs to change, not a full rewrite)
+- Default to the safest, smallest, most reversible option
+
+---
+
+## Spec-Kit Commands Reference
+
+Available Spec-Kit commands (in `.cursor/commands/`):
+- `/speckit.spec` - Generate spec.md
+- `/speckit.plan` - Generate plan.md
+- `/speckit.tasks` - Generate tasks.md and validation.md (both generated, both reviewed)
+- `/speckit.implement` - Execute implementation from tasks.md
+- `/speckit.analyze` - Analyze codebase for slice context
+
+**Note**: `/speckit.tasks` generates both `tasks.md` and `validation.md` automatically. Both documents are reviewed before the command completes.
+
+When in doubt, refer to these commands or ask the user.
+
+---
+
+## Spec-Kit Phase Review Protocol (MANDATORY)
+
+**After generating ANY Spec-Kit document, you MUST:**
+
+1. **Automatically trigger review** using the review rules (`.cursor/rules/review.mdc`)
+2. **Block progression** if review returns KO
+3. **Only proceed** to next phase after OK decision
+
+### Review Triggers
+
+- **After `/speckit.spec`**: Automatically run `review spec` (or `review @specs/<slice>/spec.md`)
+- **After `/speckit.plan`**: Automatically run `review plan` (or `review @specs/<slice>/plan.md`)
+- **After `/speckit.tasks`**: 
+  - First: Automatically run `review tasks` (or `review @specs/<slice>/tasks.md`)
+  - Then (if tasks.md review OK): Generate validation.md
+  - Then: Automatically run `review validation` (or `review @specs/<slice>/validation.md`)
+  - Both reviews must pass before command completes
+
+### Review Workflow
+
+When a Spec-Kit command completes document generation:
+
+1. **Immediate Review**: 
+   - Automatically invoke the appropriate review command
+   - Apply review rules from `.cursor/rules/review.mdc`
+   - Perform systematic scan (for tasks.md) or phase-specific checks
+
+2. **If KO**: 
+   - Stop workflow immediately
+   - Display blocking issues (3-7 issues max)
+   - Provide minimal realignment prompt
+   - Do NOT proceed to next phase
+   - Wait for user to fix document and re-run command
+
+3. **If OK**:
+   - Display "NEXT STEP" prompt with exact command
+   - Allow progression to next phase
+   - Confirm readiness for next Spec-Kit phase
+
+### Integration with Commands
+
+Each Spec-Kit command MUST follow this pattern:
+
+```
+1. Generate the document (spec.md, plan.md, tasks.md, or validation.md)
+2. Automatically trigger review using review rules
+3. Report review decision (OK/KO)
+4. If OK: Suggest next step (e.g., "NEXT STEP: /speckit.plan")
+5. If KO: Stop and provide realignment prompt
+```
+
+**Example workflow:**
+```
+User: /speckit.spec
+→ Generate spec.md
+→ Automatically: review spec (apply review.mdc rules)
+→ If OK: "NEXT STEP: /speckit.plan"
+→ If KO: "BLOCKING ISSUES: [list] - Fix issues, then re-run /speckit.spec"
+```
+
+### Review Enforcement
+
+- **No exceptions**: Review is mandatory after every document generation
+- **No skipping**: Cannot proceed to next phase without OK decision
+- **No manual override**: Review rules are non-negotiable
+- **Systematic application**: Apply all phase-specific review criteria
+
+**This ensures:**
+- Quality gates at every phase
+- Early problem detection
+- No phase leakage
+- Spec-Kit discipline maintained
+
+---
+
+If anything is unclear, ASK before proceeding.
