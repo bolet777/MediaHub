@@ -15,6 +15,9 @@ let package = Package(
         .executable(
             name: "mediahub",
             targets: ["MediaHubCLI"]),
+        .executable(
+            name: "MediaHubUI",
+            targets: ["MediaHubUI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.2.0"),
@@ -28,6 +31,11 @@ let package = Package(
             dependencies: [
                 "MediaHub",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ]),
+        .executableTarget(
+            name: "MediaHubUI",
+            dependencies: [
+                "MediaHub",
             ]),
         .testTarget(
             name: "MediaHubTests",
