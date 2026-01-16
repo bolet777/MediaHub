@@ -5,7 +5,7 @@ struct EmptyStateView: View {
         VStack(spacing: 16) {
             Text("Welcome to MediaHub")
                 .font(.largeTitle)
-            Text("Select a folder to discover libraries")
+            Text("Choose a folder to discover libraries")
                 .font(.body)
                 .foregroundColor(.secondary)
         }

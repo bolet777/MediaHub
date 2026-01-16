@@ -1,19 +1,50 @@
 import SwiftUI
+import AppKit
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
     
     var body: some View {
         NavigationSplitView {
-            // Left sidebar: placeholder "Libraries"
+            // Left sidebar: Libraries
             VStack(alignment: .leading, spacing: 8) {
                 Text("Libraries")
                     .font(.headline)
                     .padding()
                 
-                Text("(No libraries yet)")
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal)
+                Button("Choose Folder…") {
+                    chooseFolder()
+                }
+                .padding(.horizontal)
+                
+                if appState.isDiscovering {
+                    Text("Discovering…")
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal)
+                } else if appState.discoveredLibraries.isEmpty && appState.discoveryRootPath != nil {
+                    Text("(No libraries found)")
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal)
+                } else {
+                    List(selection: Binding(
+                        get: { appState.selectedLibraryPath },
+                        set: { newPath in
+                            handleLibrarySelection(newPath)
+                        }
+                    )) {
+                        ForEach(appState.discoveredLibraries) { library in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(library.displayName)
+                                if !library.isValid {
+                                    Text("Invalid")
+                                        .font(.caption)
+                                        .foregroundColor(.red)
+                                }
+                            }
+                            .tag(library.path)
+                        }
+                    }
+                }
                 
                 Spacer()
             }
@@ -35,5 +66,51 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle("MediaHub")
+    }
+    
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.title = "Choose Folder to Discover Libraries"
+        panel.message = "Select a folder to scan for MediaHub libraries"
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            let path = url.path
+            appState.discoveryRootPath = path
+            appState.isDiscovering = true
+            appState.errorMessage = nil
+            
+            Task { @MainActor in
+                do {
+                    let libraries = try LibraryDiscoveryService.scanFolder(at: path)
+                    appState.discoveredLibraries = libraries
+                    appState.isDiscovering = false
+                } catch {
+                    appState.errorMessage = "Failed to discover libraries: \(error.localizedDescription)"
+                    appState.discoveredLibraries = []
+                    appState.isDiscovering = false
+                }
+            }
+        }
+    }
+    
+    private func handleLibrarySelection(_ path: String?) {
+        guard let path = path else {
+            appState.selectedLibraryPath = nil
+            return
+        }
+        
+        // Find the library by path
+        if let library = appState.discoveredLibraries.first(where: { $0.path == path }) {
+            if library.isValid {
+                appState.selectedLibraryPath = library.path
+                appState.errorMessage = nil
+            } else {
+                appState.selectedLibraryPath = nil
+                appState.errorMessage = library.validationError ?? "This library is invalid"
+            }
+        }
     }
 }
