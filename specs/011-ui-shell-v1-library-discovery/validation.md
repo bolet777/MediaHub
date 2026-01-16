@@ -508,6 +508,245 @@ Verify CLI also shows "N/A" or omits statistics/hashCoverage fields. UI must mat
 
 ---
 
+## 3.5. T-023 — Manual Verification (UI Shell)
+
+This section provides focused manual verification steps for T-023, covering the core UI shell functionality and library discovery workflow.
+
+### Prerequisites
+
+**Build and run the app**:
+```bash
+cd /path/to/MediaHub
+swift build
+swift test  # Verify tests pass before manual testing
+swift run MediaHubUI  # GUI app runs until closed (Cmd+Q to quit)
+```
+
+**Note**: The GUI app will run until explicitly closed. Use Cmd+Q to quit, or close the window.
+
+### Verification Steps
+
+#### Step 1: App Launches and Shows Sidebar + EmptyState
+**Setup**: No setup required.
+
+**Steps**:
+1. Run: `swift run MediaHubUI`
+2. Observe the app window
+
+**Expected Results**:
+- ✅ Window opens with title "MediaHub"
+- ✅ Window displays sidebar (left pane) with "Libraries" header
+- ✅ Sidebar shows "Choose Folder…" button
+- ✅ Main content area (right pane) shows `EmptyStateView`:
+  - Text: "Welcome to MediaHub"
+  - Text: "Choose a folder to discover libraries"
+- ✅ No errors displayed
+
+**Pass/Fail**: All items must pass. Window must open within 1 second.
+
+---
+
+#### Step 2: Choose Folder… Opens NSOpenPanel and Triggers Discovery
+**Setup**: Test libraries created (see Fixture Setup in section 2).
+
+**Steps**:
+1. In the app, click "Choose Folder…" button in the sidebar
+2. In the `NSOpenPanel` dialog:
+   - Verify it's configured for directory selection only (files cannot be selected)
+   - Navigate to `/tmp` (or folder containing test libraries)
+   - Click "Open"
+3. Observe the sidebar during discovery
+
+**Expected Results**:
+- ✅ `NSOpenPanel` opens when button is clicked
+- ✅ Dialog allows directory selection only (not files)
+- ✅ After selecting a folder:
+  - Sidebar shows "Discovering…" text (if scan takes time)
+  - "Discovering…" disappears when scan completes
+  - Sidebar shows list of discovered libraries (if any found)
+
+**Pass/Fail**: Folder picker must work and trigger discovery correctly.
+
+**CLI Cross-Check** (optional):
+```bash
+# Verify libraries exist at expected paths
+ls -la /tmp/mh-ui-test-lib-*/.mediahub/library.json
+```
+
+---
+
+#### Step 3: 0 Results Shows "(No libraries found)" and NOT an Error
+**Setup**: Empty folder created (see Fixture Setup in section 2).
+
+**Steps**:
+1. In the app, click "Choose Folder…"
+2. Navigate to `/tmp/mh-ui-test-empty-folder` (or any empty folder)
+3. Click "Open"
+4. Observe the sidebar
+
+**Expected Results**:
+- ✅ Sidebar shows "(No libraries found)" text
+- ✅ NO error message is displayed
+- ✅ Main content area remains in empty state (or shows welcome message)
+- ✅ App remains usable (user can choose a different folder)
+
+**Pass/Fail**: Empty folder must show normal empty state, NOT an error.
+
+**Note**: This verifies that "no libraries found" is handled as normal state, not an error condition.
+
+---
+
+#### Step 4: Selecting an Invalid Library Shows Error and Does NOT Open It
+**Setup**: Invalid library created (see Fixture Setup in section 2). Note: Invalid libraries may appear in the discovery list with an "Invalid" label.
+
+**Steps**:
+1. In the app, select a folder containing an invalid library (e.g., `/tmp` if `mh-ui-test-invalid` exists)
+2. In the sidebar, click on a library row marked as "Invalid"
+3. Observe the main content area and any error messages
+
+**Expected Results**:
+- ✅ Invalid library row is visually distinct (shows "Invalid" label)
+- ✅ Clicking invalid library:
+  - Does NOT open the library (no `StatusView` appears)
+  - Shows error message in main content area (red text)
+  - Error message is clear and user-facing (e.g., "This library is invalid (unreadable or malformed .mediahub/library.json).")
+- ✅ `selectedLibraryPath` remains `nil` (library is not selected)
+- ✅ `openedLibraryPath` remains `nil` (library is not opened)
+
+**Pass/Fail**: Invalid library selection must show error and NOT open the library.
+
+---
+
+#### Step 5: Selecting a Valid Library Opens It and Loads Status
+**Setup**: Valid libraries discovered (from Step 2).
+
+**Steps**:
+1. In the sidebar, click on a valid library (e.g., `mh-ui-test-lib-1`)
+2. Observe the main content area
+3. Wait for status to load (if applicable)
+
+**Expected Results**:
+- ✅ Library row is visually selected (highlighted)
+- ✅ Main content area updates to show `StatusView` (replaces `EmptyStateView`)
+- ✅ `StatusView` displays:
+  - "Library Status" heading
+  - Baseline index status: "Present" / "Missing" / "N/A"
+  - Hash index status: "Present" / "Missing" / "N/A"
+  - Items count: `<n>` / "N/A"
+  - Last scan date: `<date>` / "N/A"
+- ✅ If status is loading, shows "Loading status…" text
+- ✅ Loading indicator disappears when status loads
+- ✅ No errors displayed
+
+**Pass/Fail**: Valid library must open and status must load correctly.
+
+**Timing**: Status view must appear within 2 seconds of selection.
+
+**CLI Cross-Check** (optional):
+```bash
+mediahub status --json /tmp/mh-ui-test-lib-1
+```
+Compare UI values with CLI output semantically (same values when available).
+
+---
+
+#### Step 6: Opening Failure Shows libraryOpenError and Resets Status View
+**Setup**: Valid library discovered, but simulate opening failure (e.g., by making library inaccessible during open attempt, or use a library that fails to open).
+
+**Steps**:
+1. In the sidebar, click on a library that will fail to open (if such a scenario can be created)
+2. OR: Open a valid library, then manually trigger an open failure scenario
+3. Observe error handling
+
+**Expected Results**:
+- ✅ If opening fails:
+  - `libraryOpenError` is displayed in main content area (red text)
+  - Error message is clear and user-facing (e.g., "Failed to open library: <reason>")
+  - `StatusView` is NOT displayed (or is reset to empty state)
+  - `statusViewModel.status` is `nil`
+  - `statusViewModel.errorMessage` is `nil`
+  - `statusViewModel.isLoading` is `false`
+- ✅ App remains usable (user can select a different library)
+
+**Pass/Fail**: Opening failure must show clear error and reset status view correctly.
+
+**Note**: This verifies that stale status from a previous library is not shown when a new library fails to open.
+
+---
+
+#### Step 7: Moved/Deleted Library Detection (Within ~2 Seconds)
+**Setup**: Valid library opened (from Step 5).
+
+**Steps**:
+1. Open a valid library in the app (e.g., `mh-ui-test-lib-1`)
+2. Verify `StatusView` is displayed
+3. While app is running, move or delete the library directory:
+   ```bash
+   mv /tmp/mh-ui-test-lib-1 /tmp/mh-ui-test-lib-1-moved
+   # OR: rm -rf /tmp/mh-ui-test-lib-1
+   ```
+4. Wait approximately 2 seconds
+5. Observe the app's response
+
+**Expected Results**:
+- ✅ Within ~2 seconds, app detects library is no longer accessible
+- ✅ Error message appears: "Opened library is no longer accessible (moved or deleted)."
+- ✅ `selectedLibraryPath` is cleared (`nil`)
+- ✅ `openedLibraryPath` is cleared (`nil`)
+- ✅ `libraryContext` is cleared (`nil`)
+- ✅ `StatusView` is replaced with `EmptyStateView`
+- ✅ App remains usable (user can select a different library)
+
+**Pass/Fail**: Moved/deleted library must be detected within ~2 seconds and state must be cleared correctly.
+
+**Timing**: Detection must occur within approximately 2 seconds (periodic validation runs every 2 seconds).
+
+**Cleanup**:
+```bash
+# Restore library for subsequent tests (if moved, not deleted)
+mv /tmp/mh-ui-test-lib-1-moved /tmp/mh-ui-test-lib-1
+```
+
+---
+
+#### Step 8: Determinism — Re-running Discovery Yields Same Ordering
+**Setup**: Test libraries created (see Fixture Setup in section 2).
+
+**Steps**:
+1. In the app, click "Choose Folder…"
+2. Select `/tmp` folder (or folder containing test libraries)
+3. Note the order of libraries in the sidebar (e.g., `mh-ui-test-lib-1`, `mh-ui-test-lib-2`, `mh-ui-test-lib-zebra`)
+4. Click "Choose Folder…" again
+5. Select the same folder again (`/tmp`)
+6. Note the order of libraries in the sidebar
+7. Repeat steps 4-6 two more times (total of 3 runs)
+
+**Expected Results**:
+- ✅ Libraries appear in lexicographic order by path:
+  1. `mh-ui-test-lib-1` (if path is `/tmp/mh-ui-test-lib-1`)
+  2. `mh-ui-test-lib-2` (if path is `/tmp/mh-ui-test-lib-2`)
+  3. `mh-ui-test-lib-zebra` (if path is `/tmp/mh-ui-test-lib-zebra`)
+- ✅ Order is identical across all 3 runs (deterministic)
+- ✅ Order matches lexicographic sorting by full path string
+
+**Pass/Fail**: Discovery must yield identical ordering across multiple runs (deterministic behavior).
+
+**CLI Cross-Check** (optional):
+```bash
+# Verify CLI also discovers in same order (if CLI discovery exists)
+# This is a UI-only feature, so CLI cross-check may not apply
+```
+
+---
+
+### T-023 Verification Summary
+
+**All Steps Pass**: ________ (Yes/No)
+
+**Notes**: ________
+
+---
+
 ## 4. Success Criteria Verification
 
 ### SC-001: Discovery Time < 5 Seconds

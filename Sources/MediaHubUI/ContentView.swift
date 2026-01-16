@@ -3,6 +3,7 @@ import AppKit
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
+    @StateObject private var statusViewModel = StatusViewModel()
     
     var body: some View {
         NavigationSplitView {
@@ -61,13 +62,25 @@ struct ContentView: View {
                         .foregroundStyle(.red)
                 }
                 
-                if let openedPath = appState.openedLibraryPath {
-                    Text("Opened: \(openedPath)")
+                if appState.openedLibraryPath != nil && appState.libraryContext != nil {
+                    StatusView(viewModel: statusViewModel)
                 } else {
                     EmptyStateView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .task(id: appState.openedLibraryPath) {
+            guard let opened = appState.libraryContext,
+                  let path = appState.openedLibraryPath else {
+                // Library was closed, reset status view model
+                statusViewModel.status = nil
+                statusViewModel.errorMessage = nil
+                statusViewModel.isLoading = false
+                return
+            }
+            // Library was opened, load status
+            statusViewModel.load(from: opened, libraryPath: path)
         }
         .navigationTitle("MediaHub")
         .task {
@@ -158,6 +171,10 @@ struct ContentView: View {
                         appState.setOpenedLibrary(path: path, context: openedLibrary)
                     } catch {
                         appState.clearOpenedLibrary(error: "Failed to open library: \(error.localizedDescription)")
+                        // Reset status view model to avoid showing stale status
+                        statusViewModel.status = nil
+                        statusViewModel.errorMessage = nil
+                        statusViewModel.isLoading = false
                     }
                 }
             } else {
