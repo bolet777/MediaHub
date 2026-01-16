@@ -6,7 +6,8 @@ struct MediaHubUIApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView(appState: appState)
+            ContentView()
+                .environmentObject(appState)
         }
         .defaultSize(width: 800, height: 600)
     }

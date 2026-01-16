@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @ObservedObject var appState: AppState
+    @EnvironmentObject var appState: AppState
     
     var body: some View {
         NavigationSplitView {
@@ -16,21 +16,19 @@ struct ContentView: View {
         } detail: {
             // Right detail: empty state or selected library
             VStack(spacing: 16) {
-                if let errorMessage = appState.errorMessage {
-                    Text("Error: \(errorMessage)")
-                        .foregroundColor(.red)
-                } else if let selectedPath = appState.selectedLibraryPath {
-                    Text("Selected Library")
-                        .font(.headline)
-                    Text(selectedPath)
-                        .font(.body)
-                        .foregroundColor(.secondary)
+                if let selectedPath = appState.selectedLibraryPath {
+                    Text("Selected: \(selectedPath)")
                 } else {
                     Text("Welcome to MediaHub")
                         .font(.largeTitle)
                     Text("Select a folder to discover libraries")
                         .font(.body)
                         .foregroundColor(.secondary)
+                }
+                
+                if let errorMessage = appState.errorMessage {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
