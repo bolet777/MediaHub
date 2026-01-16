@@ -57,7 +57,7 @@ open Package.swift
 **Where to observe logs/errors**:
 - Console output: Terminal where `swift run MediaHubUI` is executed
 - Xcode console: If running from Xcode
-- UI alerts: Displayed in app window
+- Inline error text: displayed in the app window (detail pane).
 - System Console.app: For system-level errors (if needed)
 
 ### Cleanup Before Validation
@@ -146,7 +146,7 @@ mkdir -p /tmp/mh-ui-test-empty-folder
 - ✅ Window opens with title "MediaHub"
 - ✅ Window displays sidebar (left pane) and main content area (right pane)
 - ✅ Main content area shows empty state message: "Welcome to MediaHub" or similar
-- ✅ Empty state includes instruction: "Select a folder to discover libraries" or similar
+- ✅ Empty state includes instruction: "Choose a folder to discover libraries"
 - ✅ Window can be resized and layout adapts appropriately
 
 **Pass/Fail**: All items must pass. Window must open within 1 second (SC-008).
@@ -255,7 +255,7 @@ chmod 000 /tmp/mh-ui-test-no-access
 5. Observe error message
 
 **Expected Results**:
-- ✅ Clear error message displayed: "You don't have permission to access this folder. Please select a different folder." or similar
+- ✅ Clear error message displayed: "Cannot access this folder. Please choose a readable folder."
 - ✅ Error is actionable (user knows what to do)
 - ✅ App remains usable (user can select different folder)
 - ✅ Error state clears when user selects different folder
@@ -362,12 +362,12 @@ rm -rf /tmp/mh-ui-test-no-access
    ```bash
    mv /tmp/mh-ui-test-lib-1 /tmp/mh-ui-test-lib-1-moved
    ```
-3. In app, attempt to access library again (e.g., trigger status refresh or select library again)
+3. Wait approximately 2 seconds (periodic validation runs every 2 seconds)
 4. Observe error message
 
 **Expected Results**:
-- ✅ App detects library is missing/moved
-- ✅ Clear error message: "The library at this location no longer exists." or similar
+- ✅ App automatically detects library is missing/moved within ~2 seconds
+- ✅ Clear error message: "Opened library is no longer accessible (moved or deleted)."
 - ✅ Error is actionable
 - ✅ App remains usable (user can select different library)
 
@@ -800,7 +800,11 @@ mv /tmp/mh-ui-test-lib-1-moved /tmp/mh-ui-test-lib-1
 
 **How to Measure**:
 1. Open a library in UI
-2. Note all displayed values (path, ID, version, source count, statistics, hash coverage, performance)
+2. Note all displayed values:
+   - Baseline index presence (Present/Missing)
+   - Hash index presence (Present/Missing/N/A)
+   - Items count (or N/A)
+   - Last scan date (or N/A)
 3. Run: `mediahub status --json <library-path>`
 4. Compare values semantically (same values when available, not exact JSON schema)
 
@@ -876,13 +880,13 @@ Test all error scenarios:
 ---
 
 ### SC-007: N/A Display for Missing Index
-**What to Measure**: "N/A" displayed for statistics and hash coverage when baseline index is missing.
+**What to Measure**: When baseline index is missing: baseline = Missing, hash index = N/A, items = N/A, last scan = N/A.
 
 **How to Measure**:
 1. Open library without baseline index (empty library)
 2. Observe status view
-3. Verify "N/A" is shown for statistics and hash coverage
-4. Compare with CLI: `mediahub status <library-path>` (should also show "N/A")
+3. Verify: baseline index = "Missing", hash index = "N/A", items = "N/A", last scan = "N/A"
+4. Compare with CLI: `mediahub status <library-path>` (should also show "N/A" or omit fields)
 
 **Threshold**: 100% match with CLI behavior
 

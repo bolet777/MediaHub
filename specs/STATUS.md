@@ -191,6 +191,17 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 - Deterministic scale metrics: identical values across multiple runs for same library state
 - Graceful degradation: Performance section shows "N/A" when baseline index is missing/invalid
 
+### ✅ Slice 11 — UI Shell v1 + Library Discovery
+**Status**: Complete, validated, and FROZEN (2026-01-16)  
+**Spec**: `specs/011-ui-shell-v1-library-discovery/`  
+**Validation**: `specs/011-ui-shell-v1-library-discovery/validation.md`
+
+**Deliverables**:
+- SwiftPM MediaHubUI app shell (SwiftUI macOS application)
+- Folder-based discovery (read-only, deterministic order)
+- Open library via Core + StatusView (baseline/hash/items/last scan)
+- Error handling + moved/deleted detection
+
 #### Follow-ups / Watchlist (non-blocking)
 
 - **[FOLLOW-UP] JSON explicitness for mediaTypes**: Decide if public JSON should always include `mediaTypes` explicitly vs omit when nil (persistence can omit). Currently: `source list`/`status` JSON always include `mediaTypes` via wrapper; confirm consistency across all JSON surfaces. *Suggested location: Future JSON schema review or Slice 11+ (UI integration)*
@@ -215,7 +226,7 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 |-------|-------|------|--------|------------|-------|--------|
 | 9b | Duplicate Reporting & Audit | Provide comprehensive duplicate reporting and audit capabilities to help users understand duplicate content across sources and libraries | Content Integrity & Deduplication | Slice 8, Slice 9 | Core / CLI | ✅ Complete |
 | 9c | Performance & Scale Observability | Establish performance benchmarks, scale testing, and guardrails to ensure MediaHub maintains acceptable performance as libraries grow | Scalability & Performance | Slice 8 | Core / CLI | ✅ Complete |
-| 11 | UI Shell v1 + Library Discovery | Basic SwiftUI app with home screen, sidebar libraries, and library discovery/selection | User Experience & Safety | Slice 1 | UI | Proposed |
+| 11 | UI Shell v1 + Library Discovery | Basic SwiftUI app with home screen, sidebar libraries, and library discovery/selection | User Experience & Safety | Slice 1 | UI | ✅ Complete |
 | 12 | UI Create / Adopt Wizard v1 | Unified wizard for library creation and adoption with preview dry-run and explicit confirmation | User Experience & Safety | Slice 1, Slice 6 | UI | Proposed |
 | 13 | UI Sources + Detect + Import (P1) | Source management (attach/detach with media types), detect preview/run, and import preview/confirm/run workflows | User Experience & Safety | Slice 2, Slice 3, Slice 10 | UI | Proposed |
 | 14 | Progress + Cancel API minimale | Add progress reporting and cancellation support to core operations (detect, import, hash) | Reliability & Maintainability | None | Core / CLI | Proposed |
