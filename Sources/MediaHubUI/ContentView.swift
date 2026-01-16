@@ -6,29 +6,30 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             // Left sidebar: placeholder "Libraries"
-            VStack {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Libraries")
                     .font(.headline)
                     .padding()
+                
+                Text("(No libraries yet)")
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal)
+                
                 Spacer()
             }
             .frame(minWidth: 200)
         } detail: {
             // Right detail: empty state or selected library
             VStack(spacing: 16) {
-                if let selectedPath = appState.selectedLibraryPath {
-                    Text("Selected: \(selectedPath)")
-                } else {
-                    Text("Welcome to MediaHub")
-                        .font(.largeTitle)
-                    Text("Select a folder to discover libraries")
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                }
-                
                 if let errorMessage = appState.errorMessage {
                     Text(errorMessage)
                         .foregroundStyle(.red)
+                }
+                
+                if let selectedPath = appState.selectedLibraryPath {
+                    Text("Selected: \(selectedPath)")
+                } else {
+                    EmptyStateView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
