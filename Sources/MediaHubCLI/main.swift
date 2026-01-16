@@ -13,6 +13,7 @@ struct MediaHubCommand: ParsableCommand {
             ImportCommand.self,
             IndexCommand.self,
             StatusCommand.self,
+            DuplicatesCommand.self,
         ],
         defaultSubcommand: nil
     )

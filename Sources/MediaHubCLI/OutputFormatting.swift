@@ -820,3 +820,196 @@ struct HashCoverageFormatter: OutputFormatter {
         }
     }
 }
+
+/// Output format for duplicate reports
+enum DuplicateReportFormat {
+    case text
+    case json
+    case csv
+}
+
+/// Formats duplicate report output
+struct DuplicateReportFormatter: OutputFormatter {
+    let libraryPath: String
+    let groups: [DuplicateGroup]
+    let summary: DuplicateSummary
+    let outputFormat: DuplicateReportFormat
+    
+    func format() -> String {
+        switch outputFormat {
+        case .text:
+            return formatText()
+        case .json:
+            return formatJSON()
+        case .csv:
+            return formatCSV()
+        }
+    }
+    
+    private func formatText() -> String {
+        // Get library name from path (last component)
+        let libraryName = (libraryPath as NSString).lastPathComponent
+        
+        // Generate timestamp
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        let generated = dateFormatter.string(from: Date())
+        
+        var output = "Duplicate Report for Library: \(libraryName)\n"
+        output += "Generated: \(generated)\n\n"
+        
+        if groups.isEmpty {
+            output += "No duplicates found.\n"
+            return output
+        }
+        
+        output += "Found \(summary.duplicateGroups) duplicate groups containing \(summary.totalDuplicateFiles) total files\n\n"
+        
+        // Format each group
+        for (index, group) in groups.enumerated() {
+            let totalSizeMB = formatSizeBytes(group.totalSizeBytes)
+            output += "Group \(index + 1): Hash \(group.hash) (\(group.fileCount) files, \(totalSizeMB) total)\n"
+            
+            // Format each file in the group
+            for file in group.files {
+                let fileSizeMB = formatSizeBytes(file.sizeBytes)
+                // Format timestamp for display (simplify ISO8601 to readable format)
+                let displayTimestamp = formatTimestamp(file.timestamp)
+                output += "  - \(file.path) (\(fileSizeMB)) [\(displayTimestamp)]\n"
+            }
+            
+            if index < groups.count - 1 {
+                output += "\n"
+            }
+        }
+        
+        output += "\nSummary:\n"
+        output += "- Total duplicate groups: \(summary.duplicateGroups)\n"
+        output += "- Total duplicate files: \(summary.totalDuplicateFiles)\n"
+        let totalSizeMB = formatSizeBytes(summary.totalDuplicateSizeBytes)
+        output += "- Total space used by duplicates: \(totalSizeMB)\n"
+        let savingsMB = formatSizeBytes(summary.potentialSavingsBytes)
+        output += "- Potential space savings: ~\(savingsMB) (keep 1 copy per group)\n"
+        
+        return output
+    }
+    
+    private func formatJSON() -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
+        // Get library name from path
+        let libraryName = (libraryPath as NSString).lastPathComponent
+        
+        // Generate ISO8601 timestamp
+        let generated = ISO8601DateFormatter().string(from: Date())
+        
+        struct DuplicateReportJSON: Codable {
+            let library: String
+            let generated: String
+            let summary: SummaryJSON
+            let groups: [GroupJSON]
+        }
+        
+        struct SummaryJSON: Codable {
+            let duplicateGroups: Int
+            let totalDuplicateFiles: Int
+            let totalDuplicateSizeBytes: Int64
+            let potentialSavingsBytes: Int64
+        }
+        
+        struct GroupJSON: Codable {
+            let hash: String
+            let fileCount: Int
+            let totalSizeBytes: Int64
+            let files: [FileJSON]
+        }
+        
+        struct FileJSON: Codable {
+            let path: String
+            let sizeBytes: Int64
+            let timestamp: String
+        }
+        
+        let report = DuplicateReportJSON(
+            library: libraryName,
+            generated: generated,
+            summary: SummaryJSON(
+                duplicateGroups: summary.duplicateGroups,
+                totalDuplicateFiles: summary.totalDuplicateFiles,
+                totalDuplicateSizeBytes: summary.totalDuplicateSizeBytes,
+                potentialSavingsBytes: summary.potentialSavingsBytes
+            ),
+            groups: groups.map { group in
+                GroupJSON(
+                    hash: group.hash,
+                    fileCount: group.fileCount,
+                    totalSizeBytes: group.totalSizeBytes,
+                    files: group.files.map { file in
+                        FileJSON(
+                            path: file.path,
+                            sizeBytes: file.sizeBytes,
+                            timestamp: file.timestamp
+                        )
+                    }
+                )
+            }
+        )
+        
+        guard let data = try? encoder.encode(report),
+              let jsonString = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        
+        return jsonString
+    }
+    
+    private func formatCSV() -> String {
+        // CSV header
+        var output = "group_hash,file_count,total_size_bytes,path,size_bytes,timestamp\n"
+        
+        // One row per file, with group metadata repeated
+        for group in groups {
+            for file in group.files {
+                // Escape CSV values (handle commas, quotes, newlines in paths)
+                let escapedHash = escapeCSV(group.hash)
+                let escapedPath = escapeCSV(file.path)
+                let escapedTimestamp = escapeCSV(file.timestamp)
+                
+                output += "\(escapedHash),\(group.fileCount),\(group.totalSizeBytes),\(escapedPath),\(file.sizeBytes),\(escapedTimestamp)\n"
+            }
+        }
+        
+        return output
+    }
+    
+    /// Formats bytes to human-readable size (MB)
+    private func formatSizeBytes(_ bytes: Int64) -> String {
+        let mb = Double(bytes) / (1024.0 * 1024.0)
+        if mb < 0.1 {
+            return String(format: "%.0f bytes", Double(bytes))
+        } else {
+            return String(format: "%.1f MB", mb)
+        }
+    }
+    
+    /// Formats ISO8601 timestamp to readable format
+    private func formatTimestamp(_ iso8601: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        if let date = formatter.date(from: iso8601) {
+            let displayFormatter = DateFormatter()
+            displayFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            return displayFormatter.string(from: date)
+        }
+        return iso8601
+    }
+    
+    /// Escapes CSV values (wraps in quotes if needed, doubles internal quotes)
+    private func escapeCSV(_ value: String) -> String {
+        // If value contains comma, quote, or newline, wrap in quotes and double internal quotes
+        if value.contains(",") || value.contains("\"") || value.contains("\n") {
+            return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        }
+        return value
+    }
+}

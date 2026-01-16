@@ -162,6 +162,20 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 
 **Note**: Validation required minor command adaptations (`detect` and `import` require `<source-id>` argument); `validation.md` was updated accordingly.
 
+### ✅ Slice 9b — Duplicate Reporting & Audit
+**Status**: Complete and validated (2026-01-15)  
+**Spec**: `specs/009b-duplicate-reporting-audit/spec.md`  
+**Validation**: `specs/009b-duplicate-reporting-audit/validation.md`
+
+**Deliverables**:
+- `mediahub duplicates` command for duplicate file reporting by content hash
+- Multiple output formats: text (human-readable), JSON (machine-readable), CSV (spreadsheet analysis)
+- Deterministic ordering: groups sorted by hash lexicographically, files sorted by path lexicographically
+- Read-only operations: zero writes to library or index, only writes to user-specified output file
+- Fail-fast validation: output path validation before processing, clear error messages for invalid indexes
+- Edge case handling: nil hashes skipped silently, empty reports supported, unwritable paths fail early
+- CLI integration: `--format` option (text/json/csv), `--output` option for file output, minimal stdout feedback when writing to file
+
 #### Follow-ups / Watchlist (non-blocking)
 
 - **[FOLLOW-UP] JSON explicitness for mediaTypes**: Decide if public JSON should always include `mediaTypes` explicitly vs omit when nil (persistence can omit). Currently: `source list`/`status` JSON always include `mediaTypes` via wrapper; confirm consistency across all JSON surfaces. *Suggested location: Future JSON schema review or Slice 11+ (UI integration)*
@@ -184,7 +198,7 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 
 | Slice | Title | Goal | Pillar | Depends on | Track | Status |
 |-------|-------|------|--------|------------|-------|--------|
-| 9b | Duplicate Reporting & Audit | Provide comprehensive duplicate reporting and audit capabilities to help users understand duplicate content across sources and libraries | Content Integrity & Deduplication | Slice 8, Slice 9 | Core / CLI | Proposed |
+| 9b | Duplicate Reporting & Audit | Provide comprehensive duplicate reporting and audit capabilities to help users understand duplicate content across sources and libraries | Content Integrity & Deduplication | Slice 8, Slice 9 | Core / CLI | ✅ Complete |
 | 9c | Performance & Scale Guardrails | Establish performance benchmarks, scale testing, and guardrails to ensure MediaHub maintains acceptable performance as libraries grow | Scalability & Performance | Slice 8 | Core / CLI | Proposed |
 | 11 | UI Shell v1 + Library Discovery | Basic SwiftUI app with home screen, sidebar libraries, and library discovery/selection | User Experience & Safety | Slice 1 | UI | Proposed |
 | 12 | UI Create / Adopt Wizard v1 | Unified wizard for library creation and adoption with preview dry-run and explicit confirmation | User Experience & Safety | Slice 1, Slice 6 | UI | Proposed |
