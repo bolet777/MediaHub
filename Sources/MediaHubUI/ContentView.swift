@@ -57,8 +57,13 @@ struct ContentView: View {
                         .foregroundStyle(.red)
                 }
                 
-                if let selectedPath = appState.selectedLibraryPath {
-                    Text("Selected: \(selectedPath)")
+                if let libraryOpenError = appState.libraryOpenError {
+                    Text(libraryOpenError)
+                        .foregroundStyle(.red)
+                }
+                
+                if let openedPath = appState.openedLibraryPath {
+                    Text("Opened: \(openedPath)")
                 } else {
                     EmptyStateView()
                 }
@@ -125,13 +130,31 @@ struct ContentView: View {
                 if let validationError = LibraryPathValidator.validateSelectedLibraryPath(path) {
                     appState.selectedLibraryPath = nil
                     appState.errorMessage = validationError
+                    appState.openedLibraryPath = nil
+                    appState.libraryContext = nil
+                    appState.libraryOpenError = nil
                 } else {
                     appState.selectedLibraryPath = path
                     appState.errorMessage = nil
+                    
+                    // Attempt to open the library
+                    do {
+                        let openedLibrary = try LibraryStatusService.openLibrary(at: path)
+                        appState.openedLibraryPath = path
+                        appState.libraryContext = openedLibrary
+                        appState.libraryOpenError = nil
+                    } catch {
+                        appState.openedLibraryPath = nil
+                        appState.libraryContext = nil
+                        appState.libraryOpenError = "Failed to open library: \(error.localizedDescription)"
+                    }
                 }
             } else {
                 appState.selectedLibraryPath = nil
                 appState.errorMessage = library.validationError ?? "This library is invalid (unreadable or malformed .mediahub/library.json)."
+                appState.openedLibraryPath = nil
+                appState.libraryContext = nil
+                appState.libraryOpenError = nil
             }
         }
     }
