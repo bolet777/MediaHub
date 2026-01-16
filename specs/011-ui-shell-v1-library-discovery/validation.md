@@ -160,7 +160,7 @@ mkdir -p /tmp/mh-ui-test-empty-folder
 
 **Steps**:
 1. Launch app (if not already running)
-2. Click "Select Folder" button (in sidebar or empty state)
+2. Click "Choose Folder…" button (in sidebar)
 3. In folder picker dialog, navigate to `/tmp`
 4. Click "Open" to select `/tmp` folder
 
@@ -223,7 +223,7 @@ mkdir -p /tmp/mh-ui-test-empty-folder
 
 **Steps**:
 1. Launch app
-2. Click "Select Folder"
+2. Click "Choose Folder…"
 3. Navigate to `/tmp/mh-ui-test-empty-folder`
 4. Click "Open"
 5. Observe UI response
@@ -249,7 +249,7 @@ chmod 000 /tmp/mh-ui-test-no-access
 
 **Steps**:
 1. Launch app
-2. Click "Select Folder"
+2. Click "Choose Folder…"
 3. Navigate to `/tmp/mh-ui-test-no-access`
 4. Attempt to select folder
 5. Observe error message
@@ -270,7 +270,7 @@ rm -rf /tmp/mh-ui-test-no-access
 
 ---
 
-#### Check 1.7: Invalid Library Metadata is Skipped
+#### Check 1.7: Invalid Library Metadata Appears with "Invalid" Label
 **Setup**: Invalid library created (Fixture Setup).
 
 **Steps**:
@@ -279,12 +279,13 @@ rm -rf /tmp/mh-ui-test-no-access
 3. Observe sidebar list
 
 **Expected Results**:
-- ✅ Only valid libraries appear in list
-- ✅ Invalid library (`mh-ui-test-invalid`) is NOT displayed
-- ✅ No crash or error alert (invalid library is silently skipped)
+- ✅ Invalid library (`mh-ui-test-invalid`) appears in list with an "Invalid" label
+- ✅ Valid libraries appear without "Invalid" label
+- ✅ No crash or error alert
 - ✅ App continues to function normally
+- ✅ Selecting invalid library shows error and does not open it (see Check 2.3)
 
-**Pass/Fail**: Invalid libraries must be skipped without crashing (FR-005, SR-003).
+**Pass/Fail**: Invalid libraries must appear in list with "Invalid" label and not crash (FR-005, SR-003).
 
 ---
 
@@ -320,35 +321,35 @@ rm -rf /tmp/mh-ui-test-no-access
 
 **Expected Results**:
 - ✅ Status view displays:
-  - Library path
-  - Library ID
-  - Library version
-  - Source count (0 for new libraries)
-  - Sources list (empty for new libraries)
+  - "Library Status" heading
+  - Baseline index: "Present" / "Missing" / "N/A"
+  - Hash index: "Present" / "Missing" / "N/A"
+  - Items: `<n>` / "N/A"
+  - Last scan: `<date>` / "N/A"
 - ✅ All fields are readable and properly formatted
 
-**Pass/Fail**: All basic library information must be displayed.
+**Pass/Fail**: All displayed status fields must be shown correctly.
+
+**Note**: Library ID, version, source count, and sources list are not currently displayed in StatusView (deferred to future slices).
 
 ---
 
 #### Check 2.3: Open Invalid Library Shows Error
-**Setup**: Invalid library created (Fixture Setup). Note: Invalid library won't appear in discovery, so we need to test this differently.
+**Setup**: Invalid library created (Fixture Setup). Invalid library appears in discovery list with "Invalid" label (see Check 1.7).
 
 **Steps**:
-1. Create invalid library manually if not already created
-2. If app allows manual path entry, enter `/tmp/mh-ui-test-invalid`
-3. OR: If app only allows selection from discovered libraries, this check may be N/A
-4. Observe error message
+1. Ensure invalid library is discovered in sidebar (from Check 1.7)
+2. Click on invalid library row (marked with "Invalid" label)
+3. Observe error message and main content area
 
 **Expected Results**:
-- ✅ Clear error message: "Library metadata is corrupted or invalid" or "Invalid library metadata" or similar
+- ✅ Clear error message displayed in main content area (red text): "This library is invalid (unreadable or malformed .mediahub/library.json)." or similar
 - ✅ Error is actionable (user knows what went wrong)
+- ✅ Library does NOT open (no StatusView appears)
 - ✅ App remains usable (user can select different library)
 - ✅ Error state clears when user selects different library
 
-**Pass/Fail**: Invalid library must show clear error message (SC-004, FR-010, SR-004).
-
-**Note**: If app only allows selection from discovered libraries (invalid ones are filtered out), document this check as "N/A - invalid libraries filtered during discovery" and explain.
+**Pass/Fail**: Invalid library selection must show clear error and NOT open the library (SC-004, FR-010, SR-004).
 
 ---
 
@@ -392,22 +393,22 @@ mv /tmp/mh-ui-test-lib-1-moved /tmp/mh-ui-test-lib-1
 
 **Expected Results**:
 - ✅ Status view displays:
-  - Path, ID, Version, Source Count
-  - Sources list (if any)
-  - Statistics section: Total items, By year, By media type
-  - Hash Coverage section: Total entries, Entries with hash, Coverage percentage
-  - Performance section: File count, Total size, Hash coverage, Duration
-- ✅ All sections are populated with actual values (not "N/A")
+  - "Library Status" heading
+  - Baseline index: "Present"
+  - Hash index: "Present" / "Missing" (based on index version and hash entries)
+  - Items: `<n>` (actual count from index)
+  - Last scan: `<date>` (if available from index lastUpdated)
+- ✅ All displayed fields show actual values (not "N/A")
 
-**Pass/Fail**: All status sections must display when baseline index is available.
+**Pass/Fail**: All displayed status fields must show correct values when baseline index is available.
 
 **CLI Cross-Check**:
 ```bash
 mediahub status --json /tmp/mh-ui-test-lib-with-index
 ```
-Compare UI values with CLI JSON output semantically (same values when available, not exact schema).
+Compare baseline index presence, hash index presence, items count, and last scan date semantically when available. Do NOT require full JSON semantic parity beyond what UI displays.
 
-**Note**: If no library with baseline index is available, mark this check as "N/A - no library with baseline index available" and explain.
+**Note**: Library ID, version, source count, sources list, statistics, hash coverage, and performance sections are not currently displayed in StatusView (deferred to future slices). If no library with baseline index is available, mark this check as "N/A - no library with baseline index available" and explain.
 
 ---
 
@@ -420,19 +421,22 @@ Compare UI values with CLI JSON output semantically (same values when available,
 
 **Expected Results**:
 - ✅ Status view displays:
-  - Path, ID, Version, Source Count
-  - Sources list (empty)
-- ✅ Statistics section shows "N/A" (or section indicates unavailable)
-- ✅ Hash Coverage section shows "N/A" (or section indicates unavailable)
-- ✅ Performance section may show "N/A" for hash coverage, but may show file count (0) and total size (0)
+  - "Library Status" heading
+  - Baseline index: "Missing"
+  - Hash index: "N/A" (not applicable when baseline index is missing)
+  - Items: "N/A" (cannot know without scanning)
+  - Last scan: "N/A" (not available without index)
+- ✅ All displayed fields show "N/A" or "Missing" appropriately
 
-**Pass/Fail**: Missing baseline index must show "N/A" for statistics and hash coverage (SC-007, FR-009).
+**Pass/Fail**: Missing baseline index must show "Missing" for baseline index and "N/A" for hash index, items, and last scan (SC-007, FR-009).
 
 **CLI Cross-Check**:
 ```bash
 mediahub status --json /tmp/mh-ui-test-lib-no-index
 ```
-Verify CLI also shows "N/A" or omits statistics/hashCoverage fields. UI must match CLI behavior.
+Compare baseline index presence, hash index presence, items count, and last scan date semantically when available. Do NOT require full JSON semantic parity beyond what UI displays.
+
+**Note**: Library ID, version, source count, sources list, statistics, hash coverage, and performance sections are not currently displayed in StatusView (deferred to future slices).
 
 ---
 
@@ -449,20 +453,16 @@ Verify CLI also shows "N/A" or omits statistics/hashCoverage fields. UI must mat
 4. Compare UI values with CLI JSON output
 
 **Expected Results**:
-- ✅ UI values match CLI values semantically:
-  - Path: Same
-  - Identifier: Same
-  - Version: Same
-  - Source Count: Same
-  - Sources: Same count and IDs
-  - Statistics: Same values when available (or both show N/A)
-  - Hash Coverage: Same values when available (or both show N/A)
-  - Performance: Same values when available (or both show N/A)
+- ✅ UI values match CLI values semantically for displayed fields:
+  - Baseline index presence: Same (Present/Missing)
+  - Hash index presence: Same (Present/Missing/N/A)
+  - Items count: Same when available (or both show N/A)
+  - Last scan date: Same when available (or both show N/A)
 - ✅ Field order and JSON schema may differ (semantic match, not exact schema)
 
-**Pass/Fail**: UI status must match CLI status information semantically (SC-003, DR-002).
+**Pass/Fail**: UI status must match CLI status information semantically for displayed fields (SC-003, DR-002).
 
-**Note**: This verifies semantic matching, not exact JSON schema/field order (per spec update).
+**Note**: This verifies semantic matching for displayed fields only. Library ID, version, source count, sources list, statistics, hash coverage, and performance sections are not currently displayed in StatusView (deferred to future slices).
 
 ---
 
@@ -646,17 +646,26 @@ ls -la /tmp/mh-ui-test-lib-*/.mediahub/library.json
 ```bash
 mediahub status --json /tmp/mh-ui-test-lib-1
 ```
-Compare UI values with CLI output semantically (same values when available).
+Compare baseline index presence, hash index presence, items count, and last scan date semantically when available. Do NOT require full JSON semantic parity beyond what UI displays.
 
 ---
 
 #### Step 6: Opening Failure Shows libraryOpenError and Resets Status View
-**Setup**: Valid library discovered, but simulate opening failure (e.g., by making library inaccessible during open attempt, or use a library that fails to open).
+**Setup**: Valid library discovered. Create a scenario where opening will fail.
 
 **Steps**:
-1. In the sidebar, click on a library that will fail to open (if such a scenario can be created)
-2. OR: Open a valid library, then manually trigger an open failure scenario
-3. Observe error handling
+1. In the app, discover libraries (e.g., select `/tmp` folder)
+2. Before selecting a library, make it temporarily inaccessible:
+   ```bash
+   # Make library folder unreadable
+   chmod 000 /tmp/mh-ui-test-lib-1
+   ```
+3. In the sidebar, click on the library (`mh-ui-test-lib-1`)
+4. Observe error handling
+5. Restore access:
+   ```bash
+   chmod 755 /tmp/mh-ui-test-lib-1
+   ```
 
 **Expected Results**:
 - ✅ If opening fails:
@@ -754,7 +763,7 @@ mv /tmp/mh-ui-test-lib-1-moved /tmp/mh-ui-test-lib-1
 
 **How to Measure**:
 1. Launch app
-2. Start stopwatch when clicking "Select Folder"
+2. Start stopwatch when clicking "Choose Folder…"
 3. Select `/tmp` folder (contains 3 test libraries)
 4. Stop stopwatch when libraries appear in sidebar
 
