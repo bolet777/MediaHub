@@ -4,6 +4,8 @@ import AppKit
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var statusViewModel = StatusViewModel()
+    @State private var showCreateWizard = false
+    @State private var showAdoptWizard = false
     
     var body: some View {
         NavigationSplitView {
@@ -13,8 +15,18 @@ struct ContentView: View {
                     .font(.headline)
                     .padding()
                 
-                Button("Choose Folder…") {
-                    chooseFolder()
+                HStack {
+                    Button("Choose Folder…") {
+                        chooseFolder()
+                    }
+                    
+                    Button("Create Library…") {
+                        showCreateWizard = true
+                    }
+                    
+                    Button("Adopt Library…") {
+                        showAdoptWizard = true
+                    }
                 }
                 .padding(.horizontal)
                 
@@ -83,6 +95,12 @@ struct ContentView: View {
             statusViewModel.load(from: opened, libraryPath: path)
         }
         .navigationTitle("MediaHub")
+        .sheet(isPresented: $showCreateWizard) {
+            CreateLibraryWizard(onCompletion: handleWizardCompletion)
+        }
+        .sheet(isPresented: $showAdoptWizard) {
+            AdoptLibraryWizard(onCompletion: handleWizardCompletion)
+        }
         .task {
             // Periodic validation of opened library path
             while !Task.isCancelled {
@@ -182,6 +200,23 @@ struct ContentView: View {
                 appState.errorMessage = library.validationError ?? "This library is invalid (unreadable or malformed .mediahub/library.json)."
                 appState.clearOpenedLibrary(error: nil)
             }
+        }
+    }
+    
+    private func handleWizardCompletion(libraryPath: String) {
+        // Close wizard sheets
+        showCreateWizard = false
+        showAdoptWizard = false
+        
+        // Open library using LibraryStatusService
+        do {
+            let openedLibrary = try LibraryStatusService.openLibrary(at: libraryPath)
+            appState.setOpenedLibrary(path: libraryPath, context: openedLibrary)
+            appState.selectedLibraryPath = libraryPath
+            appState.errorMessage = nil
+        } catch {
+            appState.clearOpenedLibrary(error: "Failed to open library: \(error.localizedDescription)")
+            appState.errorMessage = "Failed to open library: \(error.localizedDescription)"
         }
     }
 }
