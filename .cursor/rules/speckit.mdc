@@ -73,7 +73,8 @@ When asked to start a new slice:
 - Do NOT mix phases.
 - Do NOT introduce new data models or flags unless scoped.
 - Use SAFE passes: one logical zone at a time, 1–2 commands max per pass (swift build, swift test).
-- Always provide the next prompt (e.g., "Next: run `/speckit.implement T-001`" or "Next: commit these changes").
+- **SAFE PASS implementation stages changes only** - No automatic git commits per task.
+- **Final commit is human responsibility** - Human performs manual testing and final review before committing.
 
 ### SAFE Pass Details
 
@@ -82,6 +83,8 @@ When asked to start a new slice:
 - Atomic writes only (write → rename pattern)
 - Determinism and idempotence are mandatory
 - Default to the safest, smallest, most reversible option
+- **Staging only**: Each SAFE PASS stages changes with `git add`, but does NOT create commits
+- **Human review required**: After staging, human reviews, tests, and creates final commit manually
 
 ---
 
@@ -98,13 +101,22 @@ When reviewing work or responding to user feedback:
 ## Spec-Kit Commands Reference
 
 Available Spec-Kit commands (in `.cursor/commands/`):
+- `/speckit.start` - Automated Spec-Kit workflow (spec → plan → tasks → validation with reviews)
 - `/speckit.spec` - Generate spec.md
 - `/speckit.plan` - Generate plan.md
 - `/speckit.tasks` - Generate tasks.md and validation.md (both generated, both reviewed)
-- `/speckit.implement` - Execute implementation from tasks.md
+- `/speckit.runSlice` - Implement entire slice end-to-end (all tasks sequentially, staging only, user prompts)
+- `/speckit.implementSlice` - Implement ONE task from tasks.md (stages changes, no commit)
+- `/speckit.implement` - Execute implementation from tasks.md (legacy, use implementSlice for SAFE PASS)
 - `/speckit.analyze` - Analyze codebase for slice context
 
 **Note**: `/speckit.tasks` generates both `tasks.md` and `validation.md` automatically. Both documents are reviewed before the command completes.
+
+**Implementation Workflow**:
+- **Option 1 - Full slice**: Use `/speckit.runSlice` to implement all tasks sequentially (with user prompts between tasks)
+- **Option 2 - One task**: Use `/speckit.implementSlice T-XXX` to implement one task at a time
+- Both commands stage changes only (no automatic commits)
+- Human reviews, tests, and creates final commit manually when ready
 
 When in doubt, refer to these commands or ask the user.
 
