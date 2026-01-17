@@ -3,7 +3,7 @@
 **Document Type**: Project Status & Roadmap Tracking  
 **Purpose**: Memory of project state, decisions, and planned slices  
 **Last Updated**: 2026-01-27  
-**Next Review**: After Slice 13 planning or after real-world usage  
+**Next Review**: After Slice 14 planning or after real-world usage  
 **Note**: This is a tracking document, not a normative specification. For authoritative specs, see individual slice specifications in `specs/`.
 
 ---
@@ -21,9 +21,9 @@ See README.md for the authoritative North Star and product vision; STATUS.md foc
 4. **Content Integrity & Deduplication**: Hash-based duplicate detection and content verification to ensure data safety and prevent accidental duplication
 5. **User Experience & Safety**: Simple workflows with explicit confirmations, dry-run previews, and auditable operations
 
-**Current Focus**: CLI-first reliability & maintainability
+**Current Focus**: UI orchestration layer (CLI-first architecture maintained)
 
-The CLI is treated as the backend and source of truth for a future macOS desktop application.
+The CLI remains the backend and source of truth. The macOS desktop application (MediaHubUI) orchestrates CLI workflows without introducing business logic.
 
 ---
 
@@ -261,8 +261,6 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 
 | Slice | Title | Goal | Pillar | Depends on | Track | Status |
 |-------|-------|------|--------|------------|-------|--------|
-| 12 | UI Create / Adopt Wizard v1 | Unified wizard for library creation and adoption with preview dry-run and explicit confirmation | User Experience & Safety | Slice 1, Slice 6 | UI | Complete |
-| 13 | UI Sources + Detect + Import (P1) | Source management (attach/detach with media types), detect preview/run, and import preview/confirm/run workflows | User Experience & Safety | Slice 2, Slice 3, Slice 10 | UI | Complete / Frozen |
 | 13b | UI Integration & UX Polish | Integrate source/detection/import workflows with library view and source list (optional UX polish) | User Experience & Safety | Slice 13 | UI | Planned (optional) |
 | 14 | Progress + Cancel API minimale | Add progress reporting and cancellation support to core operations (detect, import, hash) | Reliability & Maintainability | None | Core / CLI | Proposed |
 | 15 | UI Operations UX (progress / cancel) | Progress bars, step indicators, and cancellation UI for detect/import/hash operations | User Experience & Safety | Slice 14 | UI | Proposed |
@@ -351,4 +349,4 @@ but does not introduce new business logic. UI slices are tracked in the Planned 
 ---
 
 **Last Updated**: 2026-01-27  
-**Next Review**: After real-world usage or next planned slice
+**Next Review**: After Slice 14 planning or after real-world usage
