@@ -1,0 +1,113 @@
+//
+//  DetectionRunView.swift
+//  MediaHubUI
+//
+//  SwiftUI view for displaying detection run results
+//
+
+import SwiftUI
+import MediaHub
+
+struct DetectionRunView: View {
+    let detectionResult: DetectionResult
+    @ObservedObject var detectionState: DetectionState
+    @ObservedObject var importState: ImportState
+    let libraryRootURL: URL
+    let libraryId: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Detection Complete")
+                .font(.headline)
+            
+            Text("Detection completed successfully")
+                .foregroundColor(.green)
+                .font(.subheadline)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Detection Statistics")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                
+                Text("Total scanned items: \(detectionResult.summary.totalScanned)")
+                Text("New items: \(detectionResult.summary.newItems)")
+                Text("Known items: \(detectionResult.summary.knownItems)")
+                
+                let duplicates = detectionResult.candidates.filter { $0.duplicateReason == "content_hash" }
+                if !duplicates.isEmpty {
+                    Text("Duplicates: \(duplicates.count)")
+                }
+            }
+            
+            let newItems = detectionResult.candidates.filter { $0.status == "new" }
+            if !newItems.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("New Items")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 4) {
+                            ForEach(Array(newItems.prefix(100)), id: \.item.path) { candidate in
+                                Text(candidate.item.path)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            if newItems.count > 100 {
+                                Text("... and \(newItems.count - 100) more")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 200)
+                }
+                
+                if let error = importState.errorMessage {
+                    Text(error)
+                        .foregroundColor(.red)
+                        .font(.caption)
+                        .padding()
+                }
+                
+                Button("Preview Import") {
+                    Task {
+                        await previewImport()
+                    }
+                }
+                .disabled(importState.isPreviewing)
+                
+                if importState.isPreviewing {
+                    ProgressView()
+                        .padding()
+                }
+            }
+        }
+        .padding()
+        .frame(width: 600, height: 500)
+    }
+    
+    private func previewImport() async {
+        importState.isPreviewing = true
+        importState.errorMessage = nil
+        
+        do {
+            // Store detectionResult for later use in executeImport
+            importState.detectionResult = detectionResult
+            
+            let result = try await ImportOrchestrator.previewImport(
+                detectionResult: detectionResult,
+                libraryRootURL: libraryRootURL,
+                libraryId: libraryId
+            )
+            
+            // Clear run sheet before showing import preview sheet
+            detectionState.runResult = nil
+            importState.previewResult = result
+            importState.isPreviewing = false
+        } catch {
+            importState.errorMessage = "Failed to preview import: \(error.localizedDescription)"
+            importState.isPreviewing = false
+        }
+    }
+}

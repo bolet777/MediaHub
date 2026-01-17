@@ -236,6 +236,25 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 
 **Note**: 34 implementation tasks completed. 8 manual verification tasks pending (T-025 through T-031, T-036 through T-038).
 
+### ✅ Slice 13 — UI Sources + Detect + Import (P1)
+**Status**: Complete / Frozen (2026-01-27)  
+**Spec**: `specs/013-ui-sources-detect-import-p1/`  
+**Plan**: `specs/013-ui-sources-detect-import-p1/plan.md`  
+**Tasks**: `specs/013-ui-sources-detect-import-p1/tasks.md`
+
+**Deliverables**:
+- Source management (attach/detach with media types)
+- Detection preview and run workflows
+- Import preview, confirmation, and execution workflows
+- SourceListView with context menu actions
+- DetectionPreviewView, DetectionRunView
+- ImportPreviewView, ImportConfirmationView, ImportExecutionView
+- State management (SourceState, DetectionState, ImportState)
+- Orchestrators (SourceOrchestrator, DetectionOrchestrator, ImportOrchestrator)
+- End-to-end UI flow from source list to import execution
+
+**Note**: P1 complete (28 tasks). Optional UI integration tasks (T-029, T-030, T-031) moved to Slice 13b.
+
 ---
 
 ## Planned Slices
@@ -243,7 +262,8 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 | Slice | Title | Goal | Pillar | Depends on | Track | Status |
 |-------|-------|------|--------|------------|-------|--------|
 | 12 | UI Create / Adopt Wizard v1 | Unified wizard for library creation and adoption with preview dry-run and explicit confirmation | User Experience & Safety | Slice 1, Slice 6 | UI | Complete |
-| 13 | UI Sources + Detect + Import (P1) | Source management (attach/detach with media types), detect preview/run, and import preview/confirm/run workflows | User Experience & Safety | Slice 2, Slice 3, Slice 10 | UI | Proposed |
+| 13 | UI Sources + Detect + Import (P1) | Source management (attach/detach with media types), detect preview/run, and import preview/confirm/run workflows | User Experience & Safety | Slice 2, Slice 3, Slice 10 | UI | Complete / Frozen |
+| 13b | UI Integration & UX Polish | Integrate source/detection/import workflows with library view and source list (optional UX polish) | User Experience & Safety | Slice 13 | UI | Planned (optional) |
 | 14 | Progress + Cancel API minimale | Add progress reporting and cancellation support to core operations (detect, import, hash) | Reliability & Maintainability | None | Core / CLI | Proposed |
 | 15 | UI Operations UX (progress / cancel) | Progress bars, step indicators, and cancellation UI for detect/import/hash operations | User Experience & Safety | Slice 14 | UI | Proposed |
 | 16 | UI Hash Maintenance + Coverage | Hash maintenance UI (batch/limit operations) and coverage insights with duplicate detection (read-only) | User Experience & Safety | Slice 9, Slice 14 | UI | Proposed |

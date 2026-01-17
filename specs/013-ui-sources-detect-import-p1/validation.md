@@ -5,13 +5,17 @@
 **Title**: UI Sources + Detect + Import (P1)  
 **Author**: Spec-Kit Orchestrator  
 **Date**: 2026-01-27  
-**Status**: Draft
+**Status**: Frozen
+
+**Note**: Slice validated without optional post-freeze UI integration tasks (T-029, T-030, T-031). These tasks have been moved to Slice 13b (optional UX polish).
 
 ---
 
 ## Validation Overview
 
 This runbook provides comprehensive validation for Slice 13 implementation. All checks are runnable and verify the success criteria from spec.md: source management (attach/detach with media types), detection preview/run, and import preview/confirm/run workflows.
+
+**Slice Status**: P1 complete (28 tasks). Optional UI integration tasks (T-029, T-030, T-031) moved to Slice 13b.
 
 **Key Validation Principles**:
 - Preview operations perform zero filesystem writes (detection preview, import preview)
