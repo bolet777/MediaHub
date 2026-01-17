@@ -4,6 +4,7 @@ import AppKit
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var statusViewModel = StatusViewModel()
+    @StateObject private var sourceState = SourceState()
     @State private var showCreateWizard = false
     @State private var showAdoptWizard = false
     
@@ -75,7 +76,30 @@ struct ContentView: View {
                 }
                 
                 if appState.openedLibraryPath != nil && appState.libraryContext != nil {
-                    StatusView(viewModel: statusViewModel)
+                    VStack(alignment: .leading, spacing: 16) {
+                        StatusView(viewModel: statusViewModel)
+                        
+                        Divider()
+                        
+                        // Source List Section
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Attached Sources")
+                                .font(.headline)
+                                .padding(.horizontal)
+                            
+                            if let opened = appState.libraryContext {
+                                SourceListView(
+                                    sourceState: sourceState,
+                                    libraryRootURL: opened.rootURL,
+                                    libraryId: opened.metadata.libraryId,
+                                    onImportComplete: {
+                                        // Refresh library status after import
+                                        statusViewModel.load(from: opened, libraryPath: appState.openedLibraryPath ?? "")
+                                    }
+                                )
+                            }
+                        }
+                    }
                 } else {
                     EmptyStateView()
                 }
@@ -89,10 +113,18 @@ struct ContentView: View {
                 statusViewModel.status = nil
                 statusViewModel.errorMessage = nil
                 statusViewModel.isLoading = false
+                // Reset source state
+                sourceState.sources = []
+                sourceState.errorMessage = nil
                 return
             }
             // Library was opened, load status
             statusViewModel.load(from: opened, libraryPath: path)
+            // Load sources
+            await sourceState.refreshSources(
+                libraryRootURL: opened.rootURL,
+                libraryId: opened.metadata.libraryId
+            )
         }
         .navigationTitle("MediaHub")
         .sheet(isPresented: $showCreateWizard) {

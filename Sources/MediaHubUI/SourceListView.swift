@@ -9,13 +9,25 @@ import SwiftUI
 import MediaHub
 
 struct SourceListView: View {
-    @StateObject private var state = SourceState()
+    @ObservedObject var sourceState: SourceState
     @StateObject private var detectionState = DetectionState()
     @StateObject private var importState = ImportState()
     let libraryRootURL: URL
     let libraryId: String
-    @State private var showDetachDialog: Source? = nil
+    @State private var showAttachSource = false
+    @State private var selectedSourceForDetach: Source? = nil
+    @State private var showDetachSource = false
+    @State private var selectedSourceForDetection: Source? = nil
     @State private var previewedSource: Source? = nil
+    
+    let onImportComplete: (() -> Void)?
+    
+    init(sourceState: SourceState, libraryRootURL: URL, libraryId: String, onImportComplete: (() -> Void)? = nil) {
+        self.sourceState = sourceState
+        self.libraryRootURL = libraryRootURL
+        self.libraryId = libraryId
+        self.onImportComplete = onImportComplete
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -24,7 +36,7 @@ struct SourceListView: View {
                     .font(.headline)
                 Spacer()
                 Button("Attach Source") {
-                    // Will be wired in T-029 (integration)
+                    showAttachSource = true
                 }
             }
             .padding()
@@ -36,7 +48,7 @@ struct SourceListView: View {
                     .padding()
             }
             
-            if state.sources.isEmpty {
+            if sourceState.sources.isEmpty {
                 VStack(spacing: 8) {
                     Text("No sources attached")
                         .foregroundColor(.secondary)
@@ -47,7 +59,7 @@ struct SourceListView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
-                    ForEach(state.sources, id: \.sourceId) { source in
+                    ForEach(sourceState.sources, id: \.sourceId) { source in
                         VStack(alignment: .leading, spacing: 4) {
                             Text(source.path)
                                 .font(.body)
@@ -71,14 +83,22 @@ struct SourceListView: View {
                             }
                         }
                         .contextMenu {
-                            Button("Run Detection (Preview)") {
+                            Button("Preview Detection") {
+                                selectedSourceForDetection = source
                                 previewedSource = source
                                 Task {
                                     await previewDetection(for: source)
                                 }
                             }
+                            Button("Run Detection") {
+                                selectedSourceForDetection = source
+                                Task {
+                                    await runDetection(for: source)
+                                }
+                            }
                             Button("Detach Source") {
-                                showDetachDialog = source
+                                selectedSourceForDetach = source
+                                showDetachSource = true
                             }
                         }
                     }
@@ -86,23 +106,32 @@ struct SourceListView: View {
             }
         }
         .task {
-            await state.refreshSources(libraryRootURL: libraryRootURL, libraryId: libraryId)
+            await sourceState.refreshSources(libraryRootURL: libraryRootURL, libraryId: libraryId)
         }
-        .sheet(isPresented: Binding(
-            get: { showDetachDialog != nil },
-            set: { if !$0 { showDetachDialog = nil } }
-        )) {
-            if let source = showDetachDialog {
+        .sheet(isPresented: $showAttachSource) {
+            AttachSourceView(
+                libraryRootURL: libraryRootURL,
+                libraryId: libraryId,
+                sourceState: sourceState,
+                onComplete: {
+                    showAttachSource = false
+                }
+            )
+        }
+        .sheet(isPresented: $showDetachSource) {
+            if let source = selectedSourceForDetach {
                 DetachSourceView(
                     source: source,
-                    sourceState: state,
+                    sourceState: sourceState,
                     libraryRootURL: libraryRootURL,
                     libraryId: libraryId,
                     onConfirm: {
-                        showDetachDialog = nil
+                        showDetachSource = false
+                        selectedSourceForDetach = nil
                     },
                     onCancel: {
-                        showDetachDialog = nil
+                        showDetachSource = false
+                        selectedSourceForDetach = nil
                     }
                 )
             }
@@ -143,7 +172,8 @@ struct SourceListView: View {
                     detectionState: detectionState,
                     importState: importState,
                     libraryRootURL: libraryRootURL,
-                    libraryId: libraryId
+                    libraryId: libraryId,
+                    onImportComplete: onImportComplete
                 )
             }
         }
@@ -161,7 +191,8 @@ struct SourceListView: View {
                     importResult: previewResult,
                     importState: importState,
                     libraryRootURL: libraryRootURL,
-                    libraryId: libraryId
+                    libraryId: libraryId,
+                    onImportComplete: onImportComplete
                 )
             }
         }
@@ -187,9 +218,32 @@ struct SourceListView: View {
             
             detectionState.previewResult = result
             detectionState.isPreviewing = false
+            // Refresh source list to show updated lastDetectedAt
+            await sourceState.refreshSources(libraryRootURL: libraryRootURL, libraryId: libraryId)
         } catch {
             detectionState.errorMessage = error.localizedDescription
             detectionState.isPreviewing = false
+        }
+    }
+    
+    private func runDetection(for source: Source) async {
+        detectionState.isRunning = true
+        detectionState.errorMessage = nil
+        
+        do {
+            let result = try await DetectionOrchestrator.runDetection(
+                source: source,
+                libraryRootURL: libraryRootURL,
+                libraryId: libraryId
+            )
+            
+            detectionState.runResult = result
+            detectionState.isRunning = false
+            // Refresh source list to show updated lastDetectedAt
+            await sourceState.refreshSources(libraryRootURL: libraryRootURL, libraryId: libraryId)
+        } catch {
+            detectionState.errorMessage = error.localizedDescription
+            detectionState.isRunning = false
         }
     }
     

@@ -286,7 +286,7 @@ A transparent, safety-first macOS desktop app for importing, organizing, auditin
 - **Auditability**: explainable decisions, reportable outputs, traceable state.
 - **Desktop Experience**: a modern macOS UI that uses the CLI/core as a backend.
 
-### Completed Slices (1–11)
+### Completed Slices (1–13b)
 - ✅ Slice 1: Library Entity & Identity
 - ✅ Slice 2: Sources & Import Detection
 - ✅ Slice 3: Import Execution & Media Organization
@@ -300,19 +300,25 @@ A transparent, safety-first macOS desktop app for importing, organizing, auditin
 - ✅ Slice 9c: Performance & Scale Observability
 - ✅ Slice 10: Source Media Types + Library Statistics
 - ✅ Slice 11: UI Shell v1 + Library Discovery
+- ✅ Slice 12: UI Create / Adopt Wizard v1
+- ✅ Slice 13: UI Sources + Detect + Import (P1)
+- ✅ Slice 13b: UI Integration & UX Polish
 
 ### Planned Slices (Next)
-- ▶️ **Slice 12 — UI Create / Adopt Wizard v1**
-  - Unified wizard for library creation and adoption with preview dry-run and explicit confirmation
-
-- ▶️ **Slice 13 — UI Sources + Detect + Import (P1)**
-  - Source management (attach/detach with media types), detect preview/run, and import preview/confirm/run workflows
-
 - ▶️ **Slice 14 — Progress + Cancel API minimale**
   - Add progress reporting and cancellation support to core operations (detect, import, hash)
 
 - ▶️ **Slice 15 — UI Operations UX (progress / cancel)**
   - Progress bars, step indicators, and cancellation UI for detect/import/hash operations
+
+- ▶️ **Slice 16 — UI Hash Maintenance + Coverage**
+  - Hash maintenance UI (batch/limit operations) and coverage insights with duplicate detection (read-only)
+
+- ▶️ **Slice 17 — History / Audit UX + Export Center**
+  - Operation timeline (detect/import/maintenance), run details, and export capabilities (JSON/CSV/TXT)
+
+- ▶️ **Slice 18 — macOS Permissions + Distribution Hardening**
+  - Sandbox strategy, notarization, security-scoped bookmarks, and distribution hardening
 
 For detailed status and per-slice validation, see `specs/STATUS.md`.
 

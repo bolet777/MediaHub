@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Slice 13b] - 2026-01-27
+
+### What: UI Integration & UX Polish
+
+**Feature**: Integration of source management, detection, and import workflows into the main library view for improved UX cohesion.
+
+**Changes**:
+- Source list integrated into library detail view (below StatusView)
+- Source management actions (attach/detach) accessible directly from library view
+- Detection actions (preview/run) accessible from source list context menu
+- Import actions accessible from detection results
+- Library status automatically refreshes after import operations
+- All workflows accessible from integrated locations in main library interface
+
+**Why**: Improves user experience by making all source/detection/import workflows accessible from the main library view, eliminating the need to navigate through separate interfaces. This provides a more cohesive and intuitive workflow.
+
+**Safety**:
+- **No new functionality**: All functionality already exists in Slice 13; this slice only integrates it
+- **No Core API changes**: Uses existing Core APIs from Slice 13
+- **State synchronization**: Source list and library status refresh automatically after operations
+- **Backward compatible**: Works with all libraries created/adopted by slices 1-13
+
+**Technical Details**:
+- SourceState shared between ContentView and SourceListView for state synchronization
+- DetectionState and ImportState managed within SourceListView and DetectionRunView respectively
+- Completion callbacks wired through view hierarchy for library status refresh
+- All existing views from Slice 13 reused without modification
+
+**Files Modified**:
+- `Sources/MediaHubUI/ContentView.swift` (added SourceState, source list section, import completion handler)
+- `Sources/MediaHubUI/SourceListView.swift` (accepts external SourceState, added attach/detach sheets, detection actions)
+- `Sources/MediaHubUI/AttachSourceView.swift` (changed from @Binding to @ObservedObject for SourceState)
+- `Sources/MediaHubUI/DetectionRunView.swift` (added internal ImportState, import completion callback)
+- `Sources/MediaHubUI/ImportPreviewView.swift` (added import completion callback parameter)
+
+**Files Added**:
+- `specs/013b-ui-integration-ux-polish/` (specification, plan, tasks, validation)
+
+**Post-Freeze Fixes (SAFE PASS)**:
+- **13b-A**: Fixed ImportExecutionView sheet dismissal bug - removed premature `previewResult = nil` before presenting execution sheet, added deterministic cleanup in `onDone` closure
+- **13b-B**: Fixed DetectionRun → ImportPreview transition - added `@MainActor` to `previewImport()` to ensure proper sheet state sequencing, dismiss DetectionRun sheet before presenting ImportPreview
+- **13b-C**: Verified AttachSourceView sourceState wiring - confirmed `@ObservedObject` usage and correct call site parameter passing
+
+---
+
 ## [Slice 8] - 2026-01-14
 
 ### What: Advanced Hashing & Deduplication

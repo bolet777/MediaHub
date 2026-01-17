@@ -13,7 +13,16 @@ struct ImportPreviewView: View {
     @ObservedObject var importState: ImportState
     let libraryRootURL: URL
     let libraryId: String
+    let onImportComplete: (() -> Void)?
     @State private var showConfirmation: Bool = false
+    
+    init(importResult: ImportResult, importState: ImportState, libraryRootURL: URL, libraryId: String, onImportComplete: (() -> Void)? = nil) {
+        self.importResult = importResult
+        self.importState = importState
+        self.libraryRootURL = libraryRootURL
+        self.libraryId = libraryId
+        self.onImportComplete = onImportComplete
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -109,7 +118,14 @@ struct ImportPreviewView: View {
                 ImportExecutionView(
                     importResult: executionResult,
                     onDone: {
+                        // Clean up deterministically: clear execution result first
                         importState.executionResult = nil
+                        // Clear preview result so the preview sheet dismisses cleanly
+                        importState.previewResult = nil
+                        // Clear any errors
+                        importState.errorMessage = nil
+                        // Call completion handler
+                        onImportComplete?()
                     }
                 )
             }
@@ -133,11 +149,13 @@ struct ImportPreviewView: View {
                 libraryId: libraryId
             )
             
-            // Clear preview and confirmation sheets before showing execution sheet
-            importState.previewResult = nil
+            // Present execution sheet first by setting executionResult
             importState.executionResult = result
             importState.isExecuting = false
             showConfirmation = false
+            
+            // Notify completion handler to refresh library status
+            onImportComplete?()
         } catch {
             importState.errorMessage = "Import failed. Please try again."
             importState.isExecuting = false

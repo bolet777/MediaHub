@@ -253,7 +253,29 @@ The CLI remains the backend and source of truth. The macOS desktop application (
 - Orchestrators (SourceOrchestrator, DetectionOrchestrator, ImportOrchestrator)
 - End-to-end UI flow from source list to import execution
 
-**Note**: P1 complete (28 tasks). Optional UI integration tasks (T-029, T-030, T-031) moved to Slice 13b.
+**Note**: P1 complete (28 tasks). Optional UI integration tasks (T-029, T-030, T-031) completed in Slice 13b.
+
+### ✅ Slice 13b — UI Integration & UX Polish
+**Status**: Complete and Frozen (2026-01-27)  
+**Spec**: `specs/013b-ui-integration-ux-polish/`  
+**Plan**: `specs/013b-ui-integration-ux-polish/plan.md`  
+**Tasks**: `specs/013b-ui-integration-ux-polish/tasks.md`  
+**Validation**: `specs/013b-ui-integration-ux-polish/validation.md`
+
+**Deliverables**:
+- Source list integrated into library detail view
+- Source management actions (attach/detach) accessible from library view
+- Detection actions (preview/run) accessible from source list
+- Import actions accessible from detection results
+- Library status refresh after import operations
+- All workflows accessible from integrated locations in main library interface
+
+**Note**: 12 implementation tasks completed. All source/detection/import workflows are now integrated into the main library view for improved UX cohesion.
+
+**Post-Freeze Fixes (SAFE PASS)**:
+- **13b-A**: Fixed ImportExecutionView sheet dismissal bug (sheet state sequencing)
+- **13b-B**: Fixed DetectionRun → ImportPreview transition (avoided competing sheets)
+- **13b-C**: Verified AttachSourceView sourceState wiring (@ObservedObject correct)
 
 ---
 
@@ -261,7 +283,6 @@ The CLI remains the backend and source of truth. The macOS desktop application (
 
 | Slice | Title | Goal | Pillar | Depends on | Track | Status |
 |-------|-------|------|--------|------------|-------|--------|
-| 13b | UI Integration & UX Polish | Integrate source/detection/import workflows with library view and source list (optional UX polish) | User Experience & Safety | Slice 13 | UI | Planned (optional) |
 | 14 | Progress + Cancel API minimale | Add progress reporting and cancellation support to core operations (detect, import, hash) | Reliability & Maintainability | None | Core / CLI | Proposed |
 | 15 | UI Operations UX (progress / cancel) | Progress bars, step indicators, and cancellation UI for detect/import/hash operations | User Experience & Safety | Slice 14 | UI | Proposed |
 | 16 | UI Hash Maintenance + Coverage | Hash maintenance UI (batch/limit operations) and coverage insights with duplicate detection (read-only) | User Experience & Safety | Slice 9, Slice 14 | UI | Proposed |
@@ -349,4 +370,5 @@ but does not introduce new business logic. UI slices are tracked in the Planned 
 ---
 
 **Last Updated**: 2026-01-27  
-**Next Review**: After Slice 14 planning or after real-world usage
+**Next Review**: After Slice 14 planning or after real-world usage  
+**Note**: Slice 13b completed, frozen, and committed. Post-freeze SAFE PASS fixes (13b-A, 13b-B, 13b-C) included.

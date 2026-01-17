@@ -12,7 +12,7 @@ import MediaHub
 struct AttachSourceView: View {
     let libraryRootURL: URL
     let libraryId: String
-    @Binding var sourceState: SourceState
+    @ObservedObject var sourceState: SourceState
     let onComplete: () -> Void
     
     @State private var selectedPath: String? = nil

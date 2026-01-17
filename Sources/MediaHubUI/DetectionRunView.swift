@@ -11,9 +11,19 @@ import MediaHub
 struct DetectionRunView: View {
     let detectionResult: DetectionResult
     @ObservedObject var detectionState: DetectionState
-    @ObservedObject var importState: ImportState
+    @StateObject private var importState = ImportState()
     let libraryRootURL: URL
     let libraryId: String
+    let onImportComplete: (() -> Void)?
+    
+    init(detectionResult: DetectionResult, detectionState: DetectionState, importState: ImportState? = nil, libraryRootURL: URL, libraryId: String, onImportComplete: (() -> Void)? = nil) {
+        self.detectionResult = detectionResult
+        self.detectionState = detectionState
+        self.libraryRootURL = libraryRootURL
+        self.libraryId = libraryId
+        self.onImportComplete = onImportComplete
+        // Note: importState parameter is ignored, we create our own instance
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -85,8 +95,28 @@ struct DetectionRunView: View {
         }
         .padding()
         .frame(width: 600, height: 500)
+        .sheet(isPresented: Binding(
+            get: { importState.previewResult != nil },
+            set: { 
+                if !$0 { 
+                    importState.previewResult = nil
+                    importState.errorMessage = nil
+                }
+            }
+        )) {
+            if let previewResult = importState.previewResult {
+                ImportPreviewView(
+                    importResult: previewResult,
+                    importState: importState,
+                    libraryRootURL: libraryRootURL,
+                    libraryId: libraryId,
+                    onImportComplete: onImportComplete
+                )
+            }
+        }
     }
     
+    @MainActor
     private func previewImport() async {
         importState.isPreviewing = true
         importState.errorMessage = nil
@@ -101,7 +131,8 @@ struct DetectionRunView: View {
                 libraryId: libraryId
             )
             
-            // Clear run sheet before showing import preview sheet
+            // Dismiss DetectionRun sheet FIRST, then present ImportPreview sheet
+            // This ensures only ONE sheet trigger is active at a time
             detectionState.runResult = nil
             importState.previewResult = result
             importState.isPreviewing = false
