@@ -39,6 +39,37 @@ public enum ImportExecutionError: Error, LocalizedError {
 
 /// Executes import jobs for selected candidate items
 public struct ImportExecutor {
+    /// Progress throttling helper to limit callbacks to 1 update per second
+    private struct ProgressThrottle {
+        var lastInvocationTime: Date? = nil
+        
+        func shouldInvoke() -> Bool {
+            guard let lastTime = lastInvocationTime else {
+                return true
+            }
+            return Date().timeIntervalSince(lastTime) >= 1.0
+        }
+        
+        mutating func recordInvocation() {
+            lastInvocationTime = Date()
+        }
+    }
+    
+    /// Invokes progress callback if needed (with throttling)
+    private static func invokeProgressIfNeeded(
+        progress: ProgressUpdate,
+        throttle: inout ProgressThrottle,
+        callback: ((ProgressUpdate) -> Void)?
+    ) {
+        guard let callback = callback else {
+            return
+        }
+        
+        if throttle.shouldInvoke() {
+            callback(progress)
+            throttle.recordInvocation()
+        }
+    }
     /// Executes an import job for selected candidate items from a detection result
     ///
     /// - Parameters:
@@ -49,8 +80,10 @@ public struct ImportExecutor {
     ///   - options: Import options (collision policy, etc.)
     ///   - dryRun: If true, preview import operations without copying files (default: false)
     ///   - fileOperations: File operations implementation (default: FileManager)
+    ///   - progress: Optional progress callback for reporting progress updates
+    ///   - cancellationToken: Optional cancellation token for canceling the operation
     /// - Returns: ImportResult with results for all items
-    /// - Throws: `ImportExecutionError` if import fails
+    /// - Throws: `ImportExecutionError` if import fails, `CancellationError` if canceled
     public static func executeImport(
         detectionResult: DetectionResult,
         selectedItems: [CandidateMediaItem],
@@ -58,7 +91,9 @@ public struct ImportExecutor {
         libraryId: String,
         options: ImportOptions,
         dryRun: Bool = false,
-        fileOperations: FileOperationsProtocol = DefaultFileOperations()
+        fileOperations: FileOperationsProtocol = DefaultFileOperations(),
+        progress: ((ProgressUpdate) -> Void)? = nil,
+        cancellationToken: CancellationToken? = nil
     ) throws -> ImportResult {
         // Validate inputs
         guard detectionResult.isValid() else {
@@ -108,7 +143,10 @@ public struct ImportExecutor {
         
         let importTimestamp = ISO8601DateFormatter().string(from: Date())
         
-        for item in sortedItems {
+        // Initialize progress throttle if progress callback provided
+        var progressThrottle = ProgressThrottle()
+        
+        for (itemIndex, item) in sortedItems.enumerated() {
             let itemResult = processImportItem(
                 item: item,
                 libraryRootURL: libraryRootURL,
@@ -167,6 +205,25 @@ public struct ImportExecutor {
                         continue
                     }
                 }
+            }
+            
+            // Invoke progress callback during import loop (throttled)
+            if let progressCallback = progress {
+                invokeProgressIfNeeded(
+                    progress: ProgressUpdate(
+                        stage: "importing",
+                        current: itemIndex + 1,
+                        total: sortedItems.count,
+                        message: nil
+                    ),
+                    throttle: &progressThrottle,
+                    callback: progressCallback
+                )
+            }
+            
+            // Check cancellation between items (after current item import completes atomically)
+            if let token = cancellationToken, token.isCanceled {
+                throw CancellationError.cancelled
             }
         }
         
@@ -302,6 +359,16 @@ public struct ImportExecutor {
             } catch {
                 throw ImportExecutionError.resultStorageFailed(error)
             }
+        }
+        
+        // Invoke progress callback at completion (not throttled, final update)
+        if let progressCallback = progress {
+            progressCallback(ProgressUpdate(
+                stage: "complete",
+                current: importItemResults.count,
+                total: importItemResults.count,
+                message: nil
+            ))
         }
         
         return importResult

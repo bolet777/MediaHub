@@ -160,6 +160,37 @@ public struct IndexUpdateResult {
 
 /// Operations for maintaining hash coverage in existing libraries
 public struct HashCoverageMaintenance {
+    /// Progress throttling helper to limit callbacks to 1 update per second
+    private struct ProgressThrottle {
+        var lastInvocationTime: Date? = nil
+        
+        func shouldInvoke() -> Bool {
+            guard let lastTime = lastInvocationTime else {
+                return true
+            }
+            return Date().timeIntervalSince(lastTime) >= 1.0
+        }
+        
+        mutating func recordInvocation() {
+            lastInvocationTime = Date()
+        }
+    }
+    
+    /// Invokes progress callback if needed (with throttling)
+    private static func invokeProgressIfNeeded(
+        progress: ProgressUpdate,
+        throttle: inout ProgressThrottle,
+        callback: ((ProgressUpdate) -> Void)?
+    ) {
+        guard let callback = callback else {
+            return
+        }
+        
+        if throttle.shouldInvoke() {
+            callback(progress)
+            throttle.recordInvocation()
+        }
+    }
     /// Selects candidates for hash computation from the baseline index
     ///
     /// This is a READ-ONLY operation that:
@@ -292,13 +323,17 @@ public struct HashCoverageMaintenance {
     ///   - libraryRoot: Absolute path to library root
     ///   - limit: Optional limit on number of files to process (for incremental operation)
     ///   - fileManager: File manager to use (default: FileManager.default)
+    ///   - progress: Optional progress callback for reporting progress updates
+    ///   - cancellationToken: Optional cancellation token for canceling the operation
     /// - Returns: Hash computation result with statistics and computed hashes
-    /// - Throws: `HashCoverageMaintenanceError` if library or index is invalid
+    /// - Throws: `HashCoverageMaintenanceError` if library or index is invalid, `CancellationError` if canceled
     ///           Note: Individual hash computation failures are collected and reported in result, not thrown
     public static func computeMissingHashes(
         libraryRoot: String,
         limit: Int? = nil,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        progress: ((ProgressUpdate) -> Void)? = nil,
+        cancellationToken: CancellationToken? = nil
     ) throws -> HashComputationResult {
         // Select candidates first
         let candidatesResult = try selectCandidates(
@@ -311,8 +346,11 @@ public struct HashCoverageMaintenance {
         var computedHashes: [String: String] = [:]
         var hashFailures = 0
         
+        // Initialize progress throttle if progress callback provided
+        var progressThrottle = ProgressThrottle()
+        
         // Compute hashes for each candidate
-        for candidate in candidatesResult.candidates {
+        for (fileIndex, candidate) in candidatesResult.candidates.enumerated() {
             let absolutePath = (libraryRoot as NSString).appendingPathComponent(candidate.path)
             let candidateURL = URL(fileURLWithPath: absolutePath)
             
@@ -330,6 +368,35 @@ public struct HashCoverageMaintenance {
                 // Collect error but continue processing other files
                 hashFailures += 1
             }
+            
+            // Invoke progress callback during hash computation loop (throttled)
+            if let progressCallback = progress {
+                invokeProgressIfNeeded(
+                    progress: ProgressUpdate(
+                        stage: "computing",
+                        current: fileIndex + 1,
+                        total: candidatesResult.candidates.count,
+                        message: nil
+                    ),
+                    throttle: &progressThrottle,
+                    callback: progressCallback
+                )
+            }
+            
+            // Check cancellation between files (after current file hash completes)
+            if let token = cancellationToken, token.isCanceled {
+                throw CancellationError.cancelled
+            }
+        }
+        
+        // Invoke progress callback at completion (not throttled, final update)
+        if let progressCallback = progress {
+            progressCallback(ProgressUpdate(
+                stage: "complete",
+                current: computedHashes.count,
+                total: candidatesResult.candidates.count,
+                message: nil
+            ))
         }
         
         // Create result

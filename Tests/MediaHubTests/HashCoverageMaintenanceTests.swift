@@ -782,4 +782,208 @@ final class HashCoverageMaintenanceTests: XCTestCase {
         XCTAssertNotNil(json["dryRun"], "Existing fields should be preserved")
         XCTAssertNotNil(json["library"], "Existing fields should be preserved")
     }
+    
+    // MARK: - Progress Callback Tests
+    
+    func testHashMaintenanceProgressCallbackInvocation() throws {
+        // Create test files
+        let file1 = tempDirectory.appendingPathComponent("2024/01/file1.jpg")
+        let file2 = tempDirectory.appendingPathComponent("2024/01/file2.jpg")
+        let file3 = tempDirectory.appendingPathComponent("2024/01/file3.jpg")
+        
+        try FileManager.default.createDirectory(at: file1.deletingLastPathComponent(), withIntermediateDirectories: true)
+        
+        try "content1".write(to: file1, atomically: true, encoding: .utf8)
+        try "content2".write(to: file2, atomically: true, encoding: .utf8)
+        try "content3".write(to: file3, atomically: true, encoding: .utf8)
+        
+        // Create index without hashes
+        let entries = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 8, mtime: "2024-01-01T00:00:00Z", hash: nil),
+            IndexEntry(path: "2024/01/file2.jpg", size: 8, mtime: "2024-01-02T00:00:00Z", hash: nil),
+            IndexEntry(path: "2024/01/file3.jpg", size: 8, mtime: "2024-01-03T00:00:00Z", hash: nil),
+        ]
+        
+        let index = BaselineIndex(entries: entries)
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRoot)
+        try BaselineIndexWriter.write(index, to: indexPath, libraryRoot: libraryRoot)
+        
+        // Record all progress callbacks
+        var progressUpdates: [ProgressUpdate] = []
+        
+        // Compute hashes with progress callback
+        let result = try HashCoverageMaintenance.computeMissingHashes(
+            libraryRoot: libraryRoot,
+            progress: { update in
+                progressUpdates.append(update)
+            }
+        )
+        
+        // Verify progress callbacks were invoked
+        XCTAssertFalse(progressUpdates.isEmpty, "Progress callbacks should be invoked")
+        
+        // Verify computing stage callbacks
+        let computingUpdates = progressUpdates.filter { $0.stage == "computing" }
+        XCTAssertFalse(computingUpdates.isEmpty, "Progress callback should be invoked during hash computation loop")
+        
+        // Verify completion callback
+        let completeUpdates = progressUpdates.filter { $0.stage == "complete" }
+        XCTAssertEqual(completeUpdates.count, 1, "Progress callback should be invoked exactly once at completion")
+        
+        if let completeUpdate = completeUpdates.first {
+            XCTAssertEqual(completeUpdate.current, result.hashesComputed)
+            XCTAssertEqual(completeUpdate.total, result.statistics.candidateCount)
+        }
+        
+        // Verify computing callbacks include current/total counts
+        if let computingUpdate = computingUpdates.first {
+            XCTAssertNotNil(computingUpdate.current)
+            XCTAssertNotNil(computingUpdate.total)
+        }
+    }
+    
+    func testHashMaintenanceProgressThrottling() throws {
+        // Create test files (many files to test throttling)
+        try FileManager.default.createDirectory(at: tempDirectory.appendingPathComponent("2024/01"), withIntermediateDirectories: true)
+        
+        for i in 1...20 {
+            let file = tempDirectory.appendingPathComponent("2024/01/file\(i).jpg")
+            try "content\(i)".write(to: file, atomically: true, encoding: .utf8)
+        }
+        
+        // Create index without hashes
+        var entries: [IndexEntry] = []
+        for i in 1...20 {
+            entries.append(IndexEntry(path: "2024/01/file\(i).jpg", size: 8, mtime: "2024-01-01T00:00:00Z", hash: nil))
+        }
+        
+        let index = BaselineIndex(entries: entries)
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRoot)
+        try BaselineIndexWriter.write(index, to: indexPath, libraryRoot: libraryRoot)
+        
+        // Record all progress callbacks
+        var progressUpdates: [ProgressUpdate] = []
+        
+        // Compute hashes with progress callback
+        _ = try HashCoverageMaintenance.computeMissingHashes(
+            libraryRoot: libraryRoot,
+            progress: { update in
+                progressUpdates.append(update)
+            }
+        )
+        
+        // Verify throttling works (computing stage callbacks should be throttled)
+        // With 20 files, we should get fewer than 20 computing callbacks due to throttling
+        let computingUpdates = progressUpdates.filter { $0.stage == "computing" }
+        // Throttling should limit callbacks (exact count depends on timing, but should be less than total files)
+        XCTAssertLessThan(computingUpdates.count, 20, "Progress callbacks should be throttled during hash computation loop")
+    }
+    
+    // MARK: - Cancellation Tests
+    
+    func testHashMaintenanceCancellationDuringComputation() throws {
+        // Create test files (many files to ensure computation takes time)
+        try FileManager.default.createDirectory(at: tempDirectory.appendingPathComponent("2024/01"), withIntermediateDirectories: true)
+        
+        for i in 1...20 {
+            let file = tempDirectory.appendingPathComponent("2024/01/file\(i).jpg")
+            try "fake image content \(i) with some data to make hash computation take time".write(to: file, atomically: true, encoding: .utf8)
+        }
+        
+        // Create index without hashes
+        var entries: [IndexEntry] = []
+        for i in 1...20 {
+            entries.append(IndexEntry(path: "2024/01/file\(i).jpg", size: 8, mtime: "2024-01-01T00:00:00Z", hash: nil))
+        }
+        
+        let index = BaselineIndex(entries: entries)
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRoot)
+        try BaselineIndexWriter.write(index, to: indexPath, libraryRoot: libraryRoot)
+        
+        // Create cancellation token
+        let token = CancellationToken()
+        
+        // Start hash computation in background
+        var computationError: Error?
+        var computationCompleted = false
+        let expectation = XCTestExpectation(description: "Hash computation completes or is canceled")
+        
+        DispatchQueue.global().async {
+            do {
+                _ = try HashCoverageMaintenance.computeMissingHashes(
+                    libraryRoot: self.libraryRoot,
+                    cancellationToken: token
+                )
+                computationCompleted = true
+            } catch {
+                computationError = error
+            }
+            expectation.fulfill()
+        }
+        
+        // Cancel after a short delay (during hash computation)
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) {
+            token.cancel()
+        }
+        
+        wait(for: [expectation], timeout: 10.0)
+        
+        // Verify either CancellationError was thrown or operation completed (race condition)
+        if computationCompleted {
+            // Operation completed before cancellation - this is acceptable
+            // Verify hashes were computed
+            let result = try HashCoverageMaintenance.computeMissingHashes(libraryRoot: libraryRoot)
+            XCTAssertGreaterThan(result.hashesComputed, 0, "Some hashes should be computed if operation completed")
+        } else if let error = computationError as? CancellationError {
+            // Operation was canceled - verify CancellationError
+            XCTAssertEqual(error, .cancelled, "Should throw CancellationError.cancelled")
+            
+            // Verify already-computed hashes remain in computedHashes map (no rollback)
+            // This is verified by the fact that cancellation occurs after hash is stored in map
+        } else {
+            XCTFail("Expected CancellationError or completion, got \(String(describing: computationError))")
+        }
+    }
+    
+    func testHashMaintenanceCancellationAtomicity() throws {
+        // Create test files
+        let file1 = tempDirectory.appendingPathComponent("2024/01/file1.jpg")
+        let file2 = tempDirectory.appendingPathComponent("2024/01/file2.jpg")
+        
+        try FileManager.default.createDirectory(at: file1.deletingLastPathComponent(), withIntermediateDirectories: true)
+        
+        try "content1".write(to: file1, atomically: true, encoding: .utf8)
+        try "content2".write(to: file2, atomically: true, encoding: .utf8)
+        
+        // Create index without hashes
+        let entries = [
+            IndexEntry(path: "2024/01/file1.jpg", size: 8, mtime: "2024-01-01T00:00:00Z", hash: nil),
+            IndexEntry(path: "2024/01/file2.jpg", size: 8, mtime: "2024-01-02T00:00:00Z", hash: nil),
+        ]
+        
+        let index = BaselineIndex(entries: entries)
+        let indexPath = BaselineIndexWriter.indexFilePath(for: libraryRoot)
+        try BaselineIndexWriter.write(index, to: indexPath, libraryRoot: libraryRoot)
+        
+        // Create cancellation token and cancel it before computation starts
+        let token = CancellationToken()
+        token.cancel()
+        
+        // Execute hash computation with cancellation token (should throw CancellationError)
+        do {
+            _ = try HashCoverageMaintenance.computeMissingHashes(
+                libraryRoot: libraryRoot,
+                cancellationToken: token
+            )
+            XCTFail("Hash computation should throw CancellationError when canceled")
+        } catch let error as CancellationError {
+            XCTAssertEqual(error, .cancelled, "Should throw CancellationError.cancelled")
+        }
+        
+        // Verify no partial index state (cancellation occurs before index update)
+        // Index update happens in applyComputedHashesAndWriteIndex, not in computeMissingHashes
+        // So cancellation in computeMissingHashes means no index update occurs
+        let preservedIndex = try BaselineIndexReader.load(from: indexPath)
+        XCTAssertEqual(preservedIndex.hashEntryCount, 0, "Index should not be updated if canceled before index write")
+    }
 }

@@ -33,18 +33,53 @@ public enum DetectionOrchestrationError: Error, LocalizedError {
 
 /// Orchestrates the complete detection workflow
 public struct DetectionOrchestrator {
+    /// Progress throttling helper to limit callbacks to 1 update per second
+    private struct ProgressThrottle {
+        var lastInvocationTime: Date? = nil
+        
+        func shouldInvoke() -> Bool {
+            guard let lastTime = lastInvocationTime else {
+                return true
+            }
+            return Date().timeIntervalSince(lastTime) >= 1.0
+        }
+        
+        mutating func recordInvocation() {
+            lastInvocationTime = Date()
+        }
+    }
+    
+    /// Invokes progress callback if needed (with throttling)
+    private static func invokeProgressIfNeeded(
+        progress: ProgressUpdate,
+        throttle: inout ProgressThrottle,
+        callback: ((ProgressUpdate) -> Void)?
+    ) {
+        guard let callback = callback else {
+            return
+        }
+        
+        if throttle.shouldInvoke() {
+            callback(progress)
+            throttle.recordInvocation()
+        }
+    }
     /// Executes a complete detection run on a Source
     ///
     /// - Parameters:
     ///   - source: The Source to detect
     ///   - libraryRootURL: The URL of the library root directory
     ///   - libraryId: The Library identifier
+    ///   - progress: Optional progress callback for reporting progress updates
+    ///   - cancellationToken: Optional cancellation token for canceling the operation
     /// - Returns: Detection result
-    /// - Throws: `DetectionOrchestrationError` if detection fails
+    /// - Throws: `DetectionOrchestrationError` if detection fails, `CancellationError` if canceled
     public static func executeDetection(
         source: Source,
         libraryRootURL: URL,
-        libraryId: String
+        libraryId: String,
+        progress: ((ProgressUpdate) -> Void)? = nil,
+        cancellationToken: CancellationToken? = nil
     ) throws -> DetectionResult {
         // Step 1: Validate Source accessibility
         let validationResult = SourceValidator.validateDuringDetection(source)
@@ -63,6 +98,28 @@ public struct DetectionOrchestrator {
         
         // Sort candidates by path for determinism
         let sortedCandidates = candidates.sorted { $0.path < $1.path }
+        
+        // Check cancellation after scanning (safe point, no library state modification yet)
+        if let token = cancellationToken, token.isCanceled {
+            throw CancellationError.cancelled
+        }
+        
+        // Initialize progress throttle if progress callback provided
+        var progressThrottle = ProgressThrottle()
+        
+        // Invoke progress callback after scanning stage
+        if let progressCallback = progress {
+            invokeProgressIfNeeded(
+                progress: ProgressUpdate(
+                    stage: "scanning",
+                    current: sortedCandidates.count,
+                    total: sortedCandidates.count,
+                    message: nil
+                ),
+                throttle: &progressThrottle,
+                callback: progressCallback
+            )
+        }
         
         // Step 3: Query Library contents (try index first, fallback to full scan)
         let libraryPaths: Set<String>
@@ -126,11 +183,13 @@ public struct DetectionOrchestrator {
         let sourceRootURL = URL(fileURLWithPath: source.path)
         var hashBasedDuplicates: [CandidateMediaItem: (hash: String, libraryPath: String)] = [:]
         
+        var comparisonIndex = 0
         for candidate in sortedCandidates {
             // Only compute hash for candidates that are "new" by path (skip known-by-path)
             let comparisonResult = comparisonResults[candidate] ?? .new
             guard comparisonResult == .new else {
                 // Skip hash computation for path-based known items
+                comparisonIndex += 1
                 continue
             }
             
@@ -143,6 +202,7 @@ public struct DetectionOrchestrator {
             } catch {
                 // Hash computation failed - continue without hash (non-fatal)
                 // Candidate will be marked as "new" without hash-based duplicate detection
+                comparisonIndex += 1
                 continue
             }
             
@@ -153,6 +213,27 @@ public struct DetectionOrchestrator {
                     hashBasedDuplicates[candidate] = (hash: hash, libraryPath: libraryPath)
                 }
             }
+            
+            // Invoke progress callback during comparison stage (throttled)
+            if let progressCallback = progress {
+                invokeProgressIfNeeded(
+                    progress: ProgressUpdate(
+                        stage: "comparing",
+                        current: comparisonIndex + 1,
+                        total: sortedCandidates.count,
+                        message: nil
+                    ),
+                    throttle: &progressThrottle,
+                    callback: progressCallback
+                )
+            }
+            
+            // Check cancellation between items (safe point, no library state modification)
+            if let token = cancellationToken, token.isCanceled {
+                throw CancellationError.cancelled
+            }
+            
+            comparisonIndex += 1
         }
         
         // Step 5: Generate detection results with status and explanations
@@ -255,6 +336,16 @@ public struct DetectionOrchestrator {
             )
         } catch let error as SourceAssociationError {
             throw DetectionOrchestrationError.sourceUpdateFailed(error)
+        }
+        
+        // Invoke progress callback at completion (not throttled, final update)
+        if let progressCallback = progress {
+            progressCallback(ProgressUpdate(
+                stage: "complete",
+                current: candidateResults.count,
+                total: candidateResults.count,
+                message: nil
+            ))
         }
         
         return result

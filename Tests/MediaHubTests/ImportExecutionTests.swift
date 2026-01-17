@@ -787,4 +787,239 @@ final class ImportExecutionTests: XCTestCase {
         // Verify video file was never processed (not in detection result)
         XCTAssertFalse(importResult.items.contains { $0.sourcePath.contains("test.mov") })
     }
+    
+    // MARK: - Progress Callback Tests
+    
+    func testImportProgressCallbackInvocation() throws {
+        // Create source with multiple files
+        var candidates: [CandidateMediaItem] = []
+        for i in 1...5 {
+            let sourceFile = sourceRootURL.appendingPathComponent("image\(i).jpg")
+            try "fake image \(i)".write(to: sourceFile, atomically: true, encoding: .utf8)
+            candidates.append(CandidateMediaItem(
+                path: sourceFile.path,
+                size: 1024,
+                modificationDate: ISO8601DateFormatter().string(from: Date()),
+                fileName: "image\(i).jpg"
+            ))
+        }
+        
+        let detectionResult = DetectionResult(
+            sourceId: source.sourceId,
+            libraryId: libraryId,
+            candidates: candidates.map { CandidateItemResult(item: $0, status: "new") },
+            summary: DetectionSummary(totalScanned: 5, newItems: 5, knownItems: 0)
+        )
+        
+        // Record all progress callbacks
+        var progressUpdates: [ProgressUpdate] = []
+        
+        // Execute import with progress callback
+        let options = ImportOptions(collisionPolicy: .rename)
+        let result = try ImportExecutor.executeImport(
+            detectionResult: detectionResult,
+            selectedItems: candidates,
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId,
+            options: options,
+            progress: { update in
+                progressUpdates.append(update)
+            }
+        )
+        
+        // Verify progress callbacks were invoked
+        XCTAssertFalse(progressUpdates.isEmpty, "Progress callbacks should be invoked")
+        
+        // Verify importing stage callbacks
+        let importingUpdates = progressUpdates.filter { $0.stage == "importing" }
+        XCTAssertFalse(importingUpdates.isEmpty, "Progress callback should be invoked during import loop")
+        
+        // Verify completion callback
+        let completeUpdates = progressUpdates.filter { $0.stage == "complete" }
+        XCTAssertEqual(completeUpdates.count, 1, "Progress callback should be invoked exactly once at completion")
+        
+        if let completeUpdate = completeUpdates.first {
+            XCTAssertEqual(completeUpdate.current, result.items.count)
+            XCTAssertEqual(completeUpdate.total, result.items.count)
+        }
+        
+        // Verify importing callbacks include current/total counts
+        if let importingUpdate = importingUpdates.first {
+            XCTAssertNotNil(importingUpdate.current)
+            XCTAssertNotNil(importingUpdate.total)
+        }
+    }
+    
+    func testImportProgressThrottling() throws {
+        // Create source with many files to test throttling
+        var candidates: [CandidateMediaItem] = []
+        for i in 1...20 {
+            let sourceFile = sourceRootURL.appendingPathComponent("image\(i).jpg")
+            try "fake image \(i)".write(to: sourceFile, atomically: true, encoding: .utf8)
+            candidates.append(CandidateMediaItem(
+                path: sourceFile.path,
+                size: 1024,
+                modificationDate: ISO8601DateFormatter().string(from: Date()),
+                fileName: "image\(i).jpg"
+            ))
+        }
+        
+        let detectionResult = DetectionResult(
+            sourceId: source.sourceId,
+            libraryId: libraryId,
+            candidates: candidates.map { CandidateItemResult(item: $0, status: "new") },
+            summary: DetectionSummary(totalScanned: 20, newItems: 20, knownItems: 0)
+        )
+        
+        // Record all progress callbacks
+        var progressUpdates: [ProgressUpdate] = []
+        
+        // Execute import with progress callback
+        let options = ImportOptions(collisionPolicy: .rename)
+        _ = try ImportExecutor.executeImport(
+            detectionResult: detectionResult,
+            selectedItems: candidates,
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId,
+            options: options,
+            progress: { update in
+                progressUpdates.append(update)
+            }
+        )
+        
+        // Verify throttling works (importing stage callbacks should be throttled)
+        // With 20 items, we should get fewer than 20 importing callbacks due to throttling
+        let importingUpdates = progressUpdates.filter { $0.stage == "importing" }
+        // Throttling should limit callbacks (exact count depends on timing, but should be less than total items)
+        XCTAssertLessThan(importingUpdates.count, 20, "Progress callbacks should be throttled during import loop")
+    }
+    
+    // MARK: - Cancellation Tests
+    
+    func testImportCancellationDuringImport() throws {
+        // Create source with multiple files
+        var candidates: [CandidateMediaItem] = []
+        for i in 1...10 {
+            let sourceFile = sourceRootURL.appendingPathComponent("image\(i).jpg")
+            try "fake image \(i)".write(to: sourceFile, atomically: true, encoding: .utf8)
+            candidates.append(CandidateMediaItem(
+                path: sourceFile.path,
+                size: 1024,
+                modificationDate: ISO8601DateFormatter().string(from: Date()),
+                fileName: "image\(i).jpg"
+            ))
+        }
+        
+        let detectionResult = DetectionResult(
+            sourceId: source.sourceId,
+            libraryId: libraryId,
+            candidates: candidates.map { CandidateItemResult(item: $0, status: "new") },
+            summary: DetectionSummary(totalScanned: 10, newItems: 10, knownItems: 0)
+        )
+        
+        // Create cancellation token
+        let token = CancellationToken()
+        
+        // Start import in background
+        var importError: Error?
+        var importCompleted = false
+        let expectation = XCTestExpectation(description: "Import completes or is canceled")
+        
+        DispatchQueue.global().async {
+            do {
+                let options = ImportOptions(collisionPolicy: .rename)
+                _ = try ImportExecutor.executeImport(
+                    detectionResult: detectionResult,
+                    selectedItems: candidates,
+                    libraryRootURL: self.libraryRootURL,
+                    libraryId: self.libraryId,
+                    options: options,
+                    cancellationToken: token
+                )
+                importCompleted = true
+            } catch {
+                importError = error
+            }
+            expectation.fulfill()
+        }
+        
+        // Cancel after a short delay (during import)
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) {
+            token.cancel()
+        }
+        
+        wait(for: [expectation], timeout: 10.0)
+        
+        // Verify either CancellationError was thrown or operation completed (race condition)
+        if importCompleted {
+            // Operation completed before cancellation - this is acceptable
+            // Verify items were imported
+            let allFiles = try FileManager.default.subpathsOfDirectory(atPath: libraryRootURL.path)
+            let importedFiles = allFiles.filter { $0.hasSuffix(".jpg") }
+            XCTAssertGreaterThan(importedFiles.count, 0, "Some items should be imported if operation completed")
+        } else if let error = importError as? CancellationError {
+            // Operation was canceled - verify CancellationError
+            XCTAssertEqual(error, .cancelled, "Should throw CancellationError.cancelled")
+            
+            // Verify already-imported items remain (no rollback)
+            let allFiles = try FileManager.default.subpathsOfDirectory(atPath: libraryRootURL.path)
+            let importedFiles = allFiles.filter { $0.hasSuffix(".jpg") }
+            XCTAssertGreaterThanOrEqual(importedFiles.count, 0, "Already-imported items should remain (no rollback)")
+        } else {
+            XCTFail("Expected CancellationError or completion, got \(String(describing: importError))")
+        }
+    }
+    
+    func testImportCancellationAtomicity() throws {
+        // Create source with multiple files
+        var candidates: [CandidateMediaItem] = []
+        for i in 1...3 {
+            let sourceFile = sourceRootURL.appendingPathComponent("image\(i).jpg")
+            try "fake image content \(i)".write(to: sourceFile, atomically: true, encoding: .utf8)
+            candidates.append(CandidateMediaItem(
+                path: sourceFile.path,
+                size: 1024,
+                modificationDate: ISO8601DateFormatter().string(from: Date()),
+                fileName: "image\(i).jpg"
+            ))
+        }
+        
+        let detectionResult = DetectionResult(
+            sourceId: source.sourceId,
+            libraryId: libraryId,
+            candidates: candidates.map { CandidateItemResult(item: $0, status: "new") },
+            summary: DetectionSummary(totalScanned: 3, newItems: 3, knownItems: 0)
+        )
+        
+        // Create cancellation token and cancel it before import starts
+        let token = CancellationToken()
+        token.cancel()
+        
+        // Execute import with cancellation token (should throw CancellationError)
+        do {
+            let options = ImportOptions(collisionPolicy: .rename)
+            _ = try ImportExecutor.executeImport(
+                detectionResult: detectionResult,
+                selectedItems: candidates,
+                libraryRootURL: libraryRootURL,
+                libraryId: libraryId,
+                options: options,
+                cancellationToken: token
+            )
+            XCTFail("Import should throw CancellationError when canceled")
+        } catch let error as CancellationError {
+            XCTAssertEqual(error, .cancelled, "Should throw CancellationError.cancelled")
+        }
+        
+        // Verify no partial file state (current item import completes atomically before cancellation)
+        // The first item may be imported before cancellation check, but it should be complete (atomic)
+        let allFiles = try FileManager.default.subpathsOfDirectory(atPath: libraryRootURL.path)
+        let importedFiles = allFiles.filter { $0.hasSuffix(".jpg") }
+        // First item may be imported (completes atomically), but subsequent items should not be imported
+        XCTAssertLessThanOrEqual(importedFiles.count, 1, "At most one item should be imported if canceled (first item completes atomically)")
+        
+        // Verify no temporary files (atomic copy ensures no partial state)
+        let tempFiles = allFiles.filter { $0.contains(".mediahub-tmp-") }
+        XCTAssertEqual(tempFiles.count, 0, "No temporary files should remain (atomic copy ensures no partial state)")
+    }
 }

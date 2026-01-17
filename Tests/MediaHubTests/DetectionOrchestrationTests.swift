@@ -575,4 +575,269 @@ final class DetectionOrchestrationTests: XCTestCase {
         XCTAssertEqual(updatedSource?.lastDetectedAt, result.detectedAt)
         XCTAssertEqual(updatedSource?.mediaTypes, .images, "mediaTypes field should be preserved when updating lastDetectedAt")
     }
+    
+    // MARK: - Progress Callback Tests
+    
+    func testDetectionProgressCallbackInvocation() throws {
+        // Create source with multiple files
+        for i in 1...5 {
+            let sourceFile = sourceDirectory.appendingPathComponent("image\(i).jpg")
+            try "fake image \(i)".write(to: sourceFile, atomically: true, encoding: .utf8)
+        }
+        
+        let source = Source(
+            sourceId: SourceIdentifierGenerator.generate(),
+            type: .folder,
+            path: sourceDirectory.path
+        )
+        
+        // Attach source to library
+        try SourceAssociationManager.attach(
+            source: source,
+            to: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Record all progress callbacks
+        var progressUpdates: [ProgressUpdate] = []
+        
+        // Execute detection with progress callback
+        let result = try DetectionOrchestrator.executeDetection(
+            source: source,
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId,
+            progress: { update in
+                progressUpdates.append(update)
+            }
+        )
+        
+        // Verify progress callbacks were invoked
+        XCTAssertFalse(progressUpdates.isEmpty, "Progress callbacks should be invoked")
+        
+        // Verify scanning stage callback
+        let scanningUpdates = progressUpdates.filter { $0.stage == "scanning" }
+        XCTAssertFalse(scanningUpdates.isEmpty, "Progress callback should be invoked during scanning stage")
+        
+        // Verify comparison stage callback (may be throttled or skipped if all items are known by path)
+        let comparingUpdates = progressUpdates.filter { $0.stage == "comparing" }
+        // Comparison callbacks may not be invoked if all items are known by path (they skip hash computation)
+        // But if any items go through hash computation, we should see comparison callbacks
+        
+        // Verify completion callback
+        let completeUpdates = progressUpdates.filter { $0.stage == "complete" }
+        XCTAssertEqual(completeUpdates.count, 1, "Progress callback should be invoked exactly once at completion")
+        
+        if let completeUpdate = completeUpdates.first {
+            XCTAssertEqual(completeUpdate.current, result.candidates.count)
+            XCTAssertEqual(completeUpdate.total, result.candidates.count)
+        }
+        
+        // Verify at least scanning and completion callbacks were received
+        XCTAssertTrue(scanningUpdates.count > 0 || comparingUpdates.count > 0, "At least one progress callback should be received during scanning or comparison")
+    }
+    
+    func testDetectionProgressThrottling() throws {
+        // Create source with many files to test throttling
+        for i in 1...20 {
+            let sourceFile = sourceDirectory.appendingPathComponent("image\(i).jpg")
+            try "fake image \(i)".write(to: sourceFile, atomically: true, encoding: .utf8)
+        }
+        
+        let source = Source(
+            sourceId: SourceIdentifierGenerator.generate(),
+            type: .folder,
+            path: sourceDirectory.path
+        )
+        
+        // Attach source to library
+        try SourceAssociationManager.attach(
+            source: source,
+            to: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Record all progress callbacks
+        var progressUpdates: [ProgressUpdate] = []
+        
+        // Execute detection with progress callback
+        _ = try DetectionOrchestrator.executeDetection(
+            source: source,
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId,
+            progress: { update in
+                progressUpdates.append(update)
+            }
+        )
+        
+        // Verify throttling works (comparison stage callbacks should be throttled)
+        // With 20 items, we should get fewer than 20 comparison callbacks due to throttling
+        let comparingUpdates = progressUpdates.filter { $0.stage == "comparing" }
+        // Throttling should limit callbacks (exact count depends on timing, but should be less than total items)
+        XCTAssertLessThan(comparingUpdates.count, 20, "Progress callbacks should be throttled during comparison stage")
+    }
+    
+    // MARK: - Cancellation Tests
+    
+    func testDetectionCancellationDuringScanning() throws {
+        // Create source with files
+        for i in 1...10 {
+            let sourceFile = sourceDirectory.appendingPathComponent("image\(i).jpg")
+            try "fake image \(i)".write(to: sourceFile, atomically: true, encoding: .utf8)
+        }
+        
+        let source = Source(
+            sourceId: SourceIdentifierGenerator.generate(),
+            type: .folder,
+            path: sourceDirectory.path
+        )
+        
+        // Attach source to library
+        try SourceAssociationManager.attach(
+            source: source,
+            to: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Create cancellation token and cancel it
+        let token = CancellationToken()
+        token.cancel()
+        
+        // Execute detection with cancellation token (should throw CancellationError)
+        do {
+            _ = try DetectionOrchestrator.executeDetection(
+                source: source,
+                libraryRootURL: libraryRootURL,
+                libraryId: libraryId,
+                cancellationToken: token
+            )
+            XCTFail("Detection should throw CancellationError when canceled")
+        } catch let error as CancellationError {
+            XCTAssertEqual(error, .cancelled, "Should throw CancellationError.cancelled")
+        }
+        
+        // Verify no source metadata was updated (no lastDetectedAt timestamp)
+        let associations = try SourceAssociationSerializer.read(
+            from: SourceAssociationStorage.associationsFileURL(for: libraryRootURL)
+        )
+        let updatedSource = associations.sources.first { $0.sourceId == source.sourceId }
+        XCTAssertNil(updatedSource?.lastDetectedAt, "Source metadata should not be updated if canceled")
+    }
+    
+    func testDetectionCancellationDuringComparison() throws {
+        // Create source with many files to ensure comparison stage takes time
+        for i in 1...50 {
+            let sourceFile = sourceDirectory.appendingPathComponent("image\(i).jpg")
+            try "fake image content \(i) with some data to make hash computation take time".write(to: sourceFile, atomically: true, encoding: .utf8)
+        }
+        
+        let source = Source(
+            sourceId: SourceIdentifierGenerator.generate(),
+            type: .folder,
+            path: sourceDirectory.path
+        )
+        
+        // Attach source to library
+        try SourceAssociationManager.attach(
+            source: source,
+            to: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Create cancellation token
+        let token = CancellationToken()
+        
+        // Start detection in background
+        var detectionError: Error?
+        var detectionCompleted = false
+        let expectation = XCTestExpectation(description: "Detection completes or is canceled")
+        
+        DispatchQueue.global().async {
+            do {
+                _ = try DetectionOrchestrator.executeDetection(
+                    source: source,
+                    libraryRootURL: self.libraryRootURL,
+                    libraryId: self.libraryId,
+                    cancellationToken: token
+                )
+                detectionCompleted = true
+            } catch {
+                detectionError = error
+            }
+            expectation.fulfill()
+        }
+        
+        // Cancel after a short delay (during comparison stage)
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) {
+            token.cancel()
+        }
+        
+        wait(for: [expectation], timeout: 10.0)
+        
+        // Verify either CancellationError was thrown or operation completed (race condition)
+        if detectionCompleted {
+            // Operation completed before cancellation - this is acceptable
+            // Verify source metadata was updated (operation completed)
+            let associations = try SourceAssociationSerializer.read(
+                from: SourceAssociationStorage.associationsFileURL(for: libraryRootURL)
+            )
+            let updatedSource = associations.sources.first { $0.sourceId == source.sourceId }
+            XCTAssertNotNil(updatedSource?.lastDetectedAt, "Source metadata should be updated if operation completed")
+        } else if let error = detectionError as? CancellationError {
+            // Operation was canceled - verify CancellationError
+            XCTAssertEqual(error, .cancelled, "Should throw CancellationError.cancelled")
+            
+            // Verify no source metadata was updated
+            let associations = try SourceAssociationSerializer.read(
+                from: SourceAssociationStorage.associationsFileURL(for: libraryRootURL)
+            )
+            let updatedSource = associations.sources.first { $0.sourceId == source.sourceId }
+            XCTAssertNil(updatedSource?.lastDetectedAt, "Source metadata should not be updated if canceled")
+        } else {
+            XCTFail("Expected CancellationError or completion, got \(String(describing: detectionError))")
+        }
+    }
+    
+    func testDetectionCancellationAfterCompletion() throws {
+        // Create source with small number of files (quick completion)
+        let sourceFile = sourceDirectory.appendingPathComponent("image.jpg")
+        try "fake image".write(to: sourceFile, atomically: true, encoding: .utf8)
+        
+        let source = Source(
+            sourceId: SourceIdentifierGenerator.generate(),
+            type: .folder,
+            path: sourceDirectory.path
+        )
+        
+        // Attach source to library
+        try SourceAssociationManager.attach(
+            source: source,
+            to: libraryRootURL,
+            libraryId: libraryId
+        )
+        
+        // Create cancellation token
+        let token = CancellationToken()
+        
+        // Execute detection (should complete normally)
+        let result = try DetectionOrchestrator.executeDetection(
+            source: source,
+            libraryRootURL: libraryRootURL,
+            libraryId: libraryId,
+            cancellationToken: token
+        )
+        
+        // Cancel after completion
+        token.cancel()
+        
+        // Verify detection completed normally (cancellation has no effect after completion)
+        XCTAssertEqual(result.summary.totalScanned, 1)
+        XCTAssertEqual(result.summary.newItems, 1)
+        
+        // Verify source metadata was updated (detection completed)
+        let associations = try SourceAssociationSerializer.read(
+            from: SourceAssociationStorage.associationsFileURL(for: libraryRootURL)
+        )
+        let updatedSource = associations.sources.first { $0.sourceId == source.sourceId }
+        XCTAssertNotNil(updatedSource?.lastDetectedAt, "Source metadata should be updated after completion")
+    }
 }

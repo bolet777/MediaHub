@@ -2,8 +2,8 @@
 
 **Document Type**: Project Status & Roadmap Tracking  
 **Purpose**: Memory of project state, decisions, and planned slices  
-**Last Updated**: 2026-01-27  
-**Next Review**: After Slice 14 planning or after real-world usage  
+**Last Updated**: 2026-01-17  
+**Next Review**: After Slice 14a planning or after real-world usage  
 **Note**: This is a tracking document, not a normative specification. For authoritative specs, see individual slice specifications in `specs/`.
 
 ---
@@ -219,7 +219,7 @@ The CLI remains the backend and source of truth. The macOS desktop application (
 - **[VERIFY] StatusCommandTests file hygiene**: Confirm no accidental duplication/rename occurred when adding `StatusCommandTests` (tests pass, but keep an eye on structure). *Suggested location: Code review or test structure audit*
 
 ### ✅ Slice 12 — UI Create / Adopt Wizard v1
-**Status**: Complete (2026-01-27)  
+**Status**: Implemented; validation pending (not frozen)  
 **Spec**: `specs/012-ui-create-adopt-wizard-v1/`  
 **Plan**: `specs/012-ui-create-adopt-wizard-v1/plan.md`  
 **Tasks**: `specs/012-ui-create-adopt-wizard-v1/tasks.md`
@@ -237,7 +237,7 @@ The CLI remains the backend and source of truth. The macOS desktop application (
 **Note**: 34 implementation tasks completed. 8 manual verification tasks pending (T-025 through T-031, T-036 through T-038).
 
 ### ✅ Slice 13 — UI Sources + Detect + Import (P1)
-**Status**: Complete / Frozen (2026-01-27)  
+**Status**: Complete / Frozen (2026-01-16)  
 **Spec**: `specs/013-ui-sources-detect-import-p1/`  
 **Plan**: `specs/013-ui-sources-detect-import-p1/plan.md`  
 **Tasks**: `specs/013-ui-sources-detect-import-p1/tasks.md`
@@ -256,7 +256,7 @@ The CLI remains the backend and source of truth. The macOS desktop application (
 **Note**: P1 complete (28 tasks). Optional UI integration tasks (T-029, T-030, T-031) completed in Slice 13b.
 
 ### ✅ Slice 13b — UI Integration & UX Polish
-**Status**: Complete and Frozen (2026-01-27)  
+**Status**: Complete and Frozen (2026-01-17)  
 **Spec**: `specs/013b-ui-integration-ux-polish/`  
 **Plan**: `specs/013b-ui-integration-ux-polish/plan.md`  
 **Tasks**: `specs/013b-ui-integration-ux-polish/tasks.md`  
@@ -277,21 +277,72 @@ The CLI remains the backend and source of truth. The macOS desktop application (
 - **13b-B**: Fixed DetectionRun → ImportPreview transition (avoided competing sheets)
 - **13b-C**: Verified AttachSourceView sourceState wiring (@ObservedObject correct)
 
+### ✅ Slice 14 — Progress + Cancel API minimale
+**Status**: Complete and Frozen (2026-01-17)  
+**Spec**: `specs/014-progress-cancel-api-minimale/spec.md`  
+**Plan**: `specs/014-progress-cancel-api-minimale/plan.md`  
+**Tasks**: `specs/014-progress-cancel-api-minimale/tasks.md`  
+**Validation**: `specs/014-progress-cancel-api-minimale/validation.md`
+
+**Deliverables**:
+- Progress API types (ProgressUpdate, CancellationToken, CancellationError)
+- Progress callback support for DetectionOrchestrator.executeDetection
+- Cancellation support for DetectionOrchestrator.executeDetection
+- Progress callback support for ImportExecutor.executeImport
+- Cancellation support for ImportExecutor.executeImport
+- Progress callback support for HashCoverageMaintenance.computeMissingHashes
+- Cancellation support for HashCoverageMaintenance.computeMissingHashes
+- Progress throttling (maximum 1 update per second)
+- Thread-safe cancellation token implementation
+- Zero overhead when progress/cancel parameters are nil
+- Backward compatibility maintained (all parameters optional with nil defaults)
+
+**Note**: All P1 tasks (T-001 through T-035) completed. 349 tests pass (0 failures). Optional P2 tasks (T-036, T-037, T-038) deferred to post-freeze.
+
+**Review Status**: ✅ OK - All success criteria (SC-001 through SC-012) verified. Zero overhead confirmed via code review. Thread safety verified. Backward compatibility maintained.
+
 ---
 
 ## Planned Slices
 
 | Slice | Title | Goal | Pillar | Depends on | Track | Status |
 |-------|-------|------|--------|------------|-------|--------|
-| 14 | Progress + Cancel API minimale | Add progress reporting and cancellation support to core operations (detect, import, hash) | Reliability & Maintainability | None | Core / CLI | Proposed |
+| 14a | UI Persistence v1 — Sidebar Libraries & Auto-Reopen | Persist UI state so users keep their library list and context across app relaunches | User Experience & Safety | Slice 14 | UI | Planned |
 | 15 | UI Operations UX (progress / cancel) | Progress bars, step indicators, and cancellation UI for detect/import/hash operations | User Experience & Safety | Slice 14 | UI | Proposed |
 | 16 | UI Hash Maintenance + Coverage | Hash maintenance UI (batch/limit operations) and coverage insights with duplicate detection (read-only) | User Experience & Safety | Slice 9, Slice 14 | UI | Proposed |
 | 17 | History / Audit UX + Export Center | Operation timeline (detect/import/maintenance), run details, and export capabilities (JSON/CSV/TXT) | User Experience & Safety, Transparency & Interoperability | Slice 14, Slice 9b | UI | Proposed |
 | 18 | macOS Permissions + Distribution Hardening | Sandbox strategy, notarization, security-scoped bookmarks, and distribution hardening | Reliability & Maintainability | Slice 11+ | UI / Core | Proposed |
 
+### Slice 14a — UI Persistence v1 — Sidebar Libraries & Auto-Reopen
+
+**Context**: Currently, on app relaunch, MediaHubUI loses the list of libraries and active context. Users must re-discover or re-open libraries manually. This is acceptable for early development, but not for real usage.
+
+**Goal**: Persist UI state so users keep their library list and context across app relaunches without reconfiguring everything on each launch.
+
+**Deliverables**:
+- Persist known/recent libraries in sidebar (UserDefaults-based)
+- Restore sidebar library list on relaunch
+- Persist last opened library and attempt auto-open
+- Gracefully handle missing or inaccessible libraries
+- UI-only persistence (no new Core or CLI logic)
+- Security-scoped bookmarks explicitly deferred to a later slice (see Slice 18)
+
+**Scope Boundaries**:
+- This slice does NOT change `.mediahub/` data (libraries and sources are already persisted)
+- This slice does NOT introduce business logic (pure UI orchestration)
+- This slice focuses purely on UI orchestration and user continuity
+- Security-scoped bookmarks and sandbox considerations deferred to Slice 18
+
+**Rationale for Placement**:
+- Persistence depends on stable long-running operations (Slice 14)
+- Core logic is already stable (slices 1-13b)
+- Security-scoped bookmarks can be deferred to Slice 18 (sandbox strategy)
+
+**Note**: Slice 18 will extend UI persistence with sandboxing and security-scoped bookmarks for production-grade persistence.
+
 ### Desktop App Track (Macro)
 
-The desktop application (UI slices 11–18) orchestrates existing CLI workflows (library, sources, detect, import, status)
+The desktop application (UI slices 11–18, including 14a) orchestrates existing CLI workflows (library, sources, detect, import, status)
 but does not introduce new business logic. UI slices are tracked in the Planned Slices table above.
 
 ---
@@ -362,13 +413,13 @@ but does not introduce new business logic. UI slices are tracked in the Planned 
 
 ## Notes
 
-- All completed slices are frozen and covered by automated validation
+- Slices are considered frozen once validation is complete; some slices may be implemented but awaiting manual verification
 - Constitution (`CONSTITUTION.md`) remains the supreme normative document
 - Individual slice specifications in `specs/` are authoritative for their scope
 - This status document is for tracking only, not normative
 
 ---
 
-**Last Updated**: 2026-01-27  
+**Last Updated**: 2026-01-17  
 **Next Review**: After Slice 14 planning or after real-world usage  
 **Note**: Slice 13b completed, frozen, and committed. Post-freeze SAFE PASS fixes (13b-A, 13b-B, 13b-C) included.
