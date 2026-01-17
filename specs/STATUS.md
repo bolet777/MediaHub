@@ -3,7 +3,7 @@
 **Document Type**: Project Status & Roadmap Tracking  
 **Purpose**: Memory of project state, decisions, and planned slices  
 **Last Updated**: 2026-01-27  
-**Next Review**: After Slice 12 planning or after real-world usage  
+**Next Review**: After Slice 13 planning or after real-world usage  
 **Note**: This is a tracking document, not a normative specification. For authoritative specs, see individual slice specifications in `specs/`.
 
 ---
@@ -218,13 +218,31 @@ The CLI is treated as the backend and source of truth for a future macOS desktop
 
 - **[VERIFY] StatusCommandTests file hygiene**: Confirm no accidental duplication/rename occurred when adding `StatusCommandTests` (tests pass, but keep an eye on structure). *Suggested location: Code review or test structure audit*
 
+### ✅ Slice 12 — UI Create / Adopt Wizard v1
+**Status**: Complete (2026-01-27)  
+**Spec**: `specs/012-ui-create-adopt-wizard-v1/`  
+**Plan**: `specs/012-ui-create-adopt-wizard-v1/plan.md`  
+**Tasks**: `specs/012-ui-create-adopt-wizard-v1/tasks.md`
+
+**Deliverables**:
+- Unified wizard for library creation and adoption
+- Path selection with folder picker and validation
+- Preview operations (dry-run) for both create and adopt
+- Explicit confirmation dialogs before execution
+- Create library wizard with preview and execution
+- Adopt library wizard with preview and execution
+- Integration with ContentView (entry points and completion handling)
+- Error mapping to user-facing messages
+
+**Note**: 34 implementation tasks completed. 8 manual verification tasks pending (T-025 through T-031, T-036 through T-038).
+
 ---
 
 ## Planned Slices
 
 | Slice | Title | Goal | Pillar | Depends on | Track | Status |
 |-------|-------|------|--------|------------|-------|--------|
-| 12 | UI Create / Adopt Wizard v1 | Unified wizard for library creation and adoption with preview dry-run and explicit confirmation | User Experience & Safety | Slice 1, Slice 6 | UI | Proposed |
+| 12 | UI Create / Adopt Wizard v1 | Unified wizard for library creation and adoption with preview dry-run and explicit confirmation | User Experience & Safety | Slice 1, Slice 6 | UI | Complete |
 | 13 | UI Sources + Detect + Import (P1) | Source management (attach/detach with media types), detect preview/run, and import preview/confirm/run workflows | User Experience & Safety | Slice 2, Slice 3, Slice 10 | UI | Proposed |
 | 14 | Progress + Cancel API minimale | Add progress reporting and cancellation support to core operations (detect, import, hash) | Reliability & Maintainability | None | Core / CLI | Proposed |
 | 15 | UI Operations UX (progress / cancel) | Progress bars, step indicators, and cancellation UI for detect/import/hash operations | User Experience & Safety | Slice 14 | UI | Proposed |
