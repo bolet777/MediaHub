@@ -1,11 +1,19 @@
 import Foundation
 
+struct HashCoverageInfo: Equatable {
+    let totalEntries: Int
+    let entriesWithHash: Int
+    let entriesMissingHash: Int
+    let hashCoverage: Double  // 0.0 to 1.0
+}
+
 struct LibraryStatus: Equatable {
     let libraryPath: String
     let isBaselineIndexPresent: Bool?   // nil = unknown / N/A
     let isHashIndexPresent: Bool?       // nil = unknown / N/A
     let itemsCount: Int?                // nil = N/A
     let lastScanDate: Date?             // optional if readily available later; can be nil always for now
+    let hashCoverage: HashCoverageInfo? // nil = N/A (when baseline index missing/invalid)
     
     var summaryLines: [String] {
         var lines: [String] = []

@@ -28,6 +28,8 @@ Tasks are organized by phase and user story, following the implementation sequen
 
 **Expected Files Touched**:
 - `Sources/MediaHubUI/StatusView.swift` (update)
+- `Sources/MediaHubUI/LibraryStatus.swift` (update - add HashCoverageInfo and hashCoverage property)
+- `Sources/MediaHubUI/LibraryStatusService.swift` (update - populate hashCoverage from baseline index)
 
 **Steps**:
 1. Locate `StatusView.swift` and identify where library statistics are displayed
@@ -36,9 +38,12 @@ Tasks are organized by phase and user story, following the implementation sequen
    - Total entries count
    - Entries with hash count
    - Entries missing hash count
-3. Extract hash coverage data from `LibraryStatus.hashCoverage` (already available from Slice 9)
-4. Handle graceful degradation: if `hashCoverage` is nil, display "N/A" or "Not available"
-5. Format percentage display (e.g., "75.5%" or "100%")
+3. Add `HashCoverageInfo` struct and `hashCoverage` property to `LibraryStatus` (if not already present from Slice 9)
+4. Update `LibraryStatusService` to populate `hashCoverage` from baseline index
+5. Extract hash coverage data from `LibraryStatus.hashCoverage` in StatusView
+6. Handle graceful degradation: if `hashCoverage` is nil, display "N/A" or "Not available"
+7. Format percentage display (e.g., "75.5%" or "100%")
+8. Display all required statistics: percentage, total entries, entries with hash, entries missing hash
 
 **Done When**:
 - Hash coverage statistics display correctly when library is opened

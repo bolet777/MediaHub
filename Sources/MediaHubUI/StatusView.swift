@@ -43,6 +43,17 @@ struct StatusView: View {
                     } else {
                         Text("Last scan: N/A")
                     }
+                    
+                    // Hash coverage
+                    if let hashCoverage = status.hashCoverage {
+                        let percentage = Int(hashCoverage.hashCoverage * 100)
+                        Text("Hash coverage: \(percentage)%")
+                        Text("  Total entries: \(hashCoverage.totalEntries)")
+                        Text("  Entries with hash: \(hashCoverage.entriesWithHash)")
+                        Text("  Entries missing hash: \(hashCoverage.entriesMissingHash)")
+                    } else {
+                        Text("Hash coverage: N/A")
+                    }
                 }
             } else {
                 Text("No status loaded.")

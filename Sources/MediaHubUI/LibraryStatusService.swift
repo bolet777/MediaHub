@@ -37,12 +37,21 @@ struct LibraryStatusService {
             let formatter = ISO8601DateFormatter()
             lastScanDate = formatter.date(from: index.lastUpdated)
             
+            // Hash coverage information
+            let hashCoverage = HashCoverageInfo(
+                totalEntries: index.entryCount,
+                entriesWithHash: index.hashEntryCount,
+                entriesMissingHash: index.entryCount - index.hashEntryCount,
+                hashCoverage: index.hashCoverage
+            )
+            
             return LibraryStatus(
                 libraryPath: libraryPath,
                 isBaselineIndexPresent: isBaselineIndexPresent,
                 isHashIndexPresent: isHashIndexPresent,
                 itemsCount: itemsCount,
-                lastScanDate: lastScanDate
+                lastScanDate: lastScanDate,
+                hashCoverage: hashCoverage
             )
             
         case .absent, .invalid:
@@ -52,7 +61,8 @@ struct LibraryStatusService {
                 isBaselineIndexPresent: false,
                 isHashIndexPresent: nil, // N/A when baseline index not available
                 itemsCount: nil, // Cannot know without scanning
-                lastScanDate: nil
+                lastScanDate: nil,
+                hashCoverage: nil // N/A when baseline index not available
             )
         }
     }
