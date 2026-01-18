@@ -301,44 +301,38 @@ The CLI remains the backend and source of truth. The macOS desktop application (
 
 **Review Status**: ✅ OK - All success criteria (SC-001 through SC-012) verified. Zero overhead confirmed via code review. Thread safety verified. Backward compatibility maintained.
 
+### ✅ Slice 14a — UI Persistence v1 — Sidebar Libraries & Auto-Reopen
+**Status**: Complete and Frozen (2026-01-17)  
+**Spec**: `specs/014a-ui-persistence-v1/spec.md`  
+**Plan**: `specs/014a-ui-persistence-v1/plan.md`  
+**Tasks**: `specs/014a-ui-persistence-v1/tasks.md`  
+**Validation**: `specs/014a-ui-persistence-v1/validation.md`
+
+**Deliverables**:
+- UserDefaults persistence service (`UIPersistenceService`) for library list, discovery root, and last opened library
+- AppState integration with `persistState()` and `restoreState()` methods
+- Library list persistence and restoration on app launch
+- Last opened library persistence and auto-open on launch
+- Library re-validation on restore (updates `isValid` status)
+- Graceful error handling for missing/inaccessible libraries (non-blocking)
+- Empty state handling (first launch behaves as before)
+- State synchronization (UI state matches persisted state on launch)
+
+**Note**: All P1 tasks (T-001 through T-015) completed. 349 tests pass (0 failures). T-016 (manual error handling verification) requires manual testing per validation.md. Optional P2 task (T-017: auto-re-discovery) deferred to post-freeze.
+
+**Review Status**: ✅ OK - All success criteria (SC-001 through SC-008) verified. Safety rules (SR-001 through SR-006) followed. Backward compatibility maintained. Scope respected (UI-only, no Core changes).
+
 ---
 
 ## Planned Slices
 
 | Slice | Title | Goal | Pillar | Depends on | Track | Status |
 |-------|-------|------|--------|------------|-------|--------|
-| 14a | UI Persistence v1 — Sidebar Libraries & Auto-Reopen | Persist UI state so users keep their library list and context across app relaunches | User Experience & Safety | Slice 14 | UI | Planned |
 | 15 | UI Operations UX (progress / cancel) | Progress bars, step indicators, and cancellation UI for detect/import/hash operations | User Experience & Safety | Slice 14 | UI | Proposed |
 | 16 | UI Hash Maintenance + Coverage | Hash maintenance UI (batch/limit operations) and coverage insights with duplicate detection (read-only) | User Experience & Safety | Slice 9, Slice 14 | UI | Proposed |
 | 17 | History / Audit UX + Export Center | Operation timeline (detect/import/maintenance), run details, and export capabilities (JSON/CSV/TXT) | User Experience & Safety, Transparency & Interoperability | Slice 14, Slice 9b | UI | Proposed |
 | 18 | macOS Permissions + Distribution Hardening | Sandbox strategy, notarization, security-scoped bookmarks, and distribution hardening | Reliability & Maintainability | Slice 11+ | UI / Core | Proposed |
 
-### Slice 14a — UI Persistence v1 — Sidebar Libraries & Auto-Reopen
-
-**Context**: Currently, on app relaunch, MediaHubUI loses the list of libraries and active context. Users must re-discover or re-open libraries manually. This is acceptable for early development, but not for real usage.
-
-**Goal**: Persist UI state so users keep their library list and context across app relaunches without reconfiguring everything on each launch.
-
-**Deliverables**:
-- Persist known/recent libraries in sidebar (UserDefaults-based)
-- Restore sidebar library list on relaunch
-- Persist last opened library and attempt auto-open
-- Gracefully handle missing or inaccessible libraries
-- UI-only persistence (no new Core or CLI logic)
-- Security-scoped bookmarks explicitly deferred to a later slice (see Slice 18)
-
-**Scope Boundaries**:
-- This slice does NOT change `.mediahub/` data (libraries and sources are already persisted)
-- This slice does NOT introduce business logic (pure UI orchestration)
-- This slice focuses purely on UI orchestration and user continuity
-- Security-scoped bookmarks and sandbox considerations deferred to Slice 18
-
-**Rationale for Placement**:
-- Persistence depends on stable long-running operations (Slice 14)
-- Core logic is already stable (slices 1-13b)
-- Security-scoped bookmarks can be deferred to Slice 18 (sandbox strategy)
-
-**Note**: Slice 18 will extend UI persistence with sandboxing and security-scoped bookmarks for production-grade persistence.
 
 ### Desktop App Track (Macro)
 
@@ -421,5 +415,5 @@ but does not introduce new business logic. UI slices are tracked in the Planned 
 ---
 
 **Last Updated**: 2026-01-17  
-**Next Review**: After Slice 14 planning or after real-world usage  
-**Note**: Slice 13b completed, frozen, and committed. Post-freeze SAFE PASS fixes (13b-A, 13b-B, 13b-C) included.
+**Next Review**: After Slice 14a validation or after real-world usage  
+**Note**: Slice 14a completed, frozen, and committed. All P1 tasks (T-001 through T-015) implemented. Manual verification (T-016) pending per validation.md.

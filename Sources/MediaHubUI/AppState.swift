@@ -27,4 +27,38 @@ final class AppState: ObservableObject {
         libraryContext = nil
         libraryOpenError = error
     }
+    
+    /// Persists current UI state to UserDefaults.
+    func persistState() {
+        UIPersistenceService.persistLibraryList(discoveredLibraries, discoveryRoot: discoveryRootPath)
+        UIPersistenceService.persistLastOpenedLibrary(openedLibraryPath)
+    }
+    
+    /// Restores UI state from UserDefaults.
+    func restoreState() {
+        let (libraries, discoveryRoot) = UIPersistenceService.restoreLibraryList()
+        
+        // Re-validate libraries and update isValid status
+        discoveredLibraries = libraries.map { library in
+            if let validationError = LibraryPathValidator.validateSelectedLibraryPath(library.path) {
+                return DiscoveredLibrary(
+                    path: library.path,
+                    displayName: library.displayName,
+                    isValid: false,
+                    validationError: validationError
+                )
+            } else {
+                return DiscoveredLibrary(
+                    path: library.path,
+                    displayName: library.displayName,
+                    isValid: true,
+                    validationError: nil
+                )
+            }
+        }
+        
+        discoveryRootPath = discoveryRoot
+        
+        openedLibraryPath = UIPersistenceService.restoreLastOpenedLibrary()
+    }
 }

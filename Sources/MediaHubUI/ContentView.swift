@@ -127,6 +127,36 @@ struct ContentView: View {
             )
         }
         .navigationTitle("MediaHub")
+        .onAppear {
+            appState.restoreState()
+        }
+        .task {
+            // Auto-open last opened library on launch (if restored but not yet opened)
+            guard let restoredPath = appState.openedLibraryPath,
+                  appState.libraryContext == nil else {
+                // Library already opened or no restored path
+                return
+            }
+            
+            // Validate library path
+            if let validationError = LibraryPathValidator.validateSelectedLibraryPath(restoredPath) {
+                // Library is invalid or missing
+                appState.clearOpenedLibrary(error: "Library no longer accessible: \(validationError)")
+                UIPersistenceService.persistLastOpenedLibrary(nil)
+                return
+            }
+            
+            // Attempt to open library
+            do {
+                let openedLibrary = try LibraryStatusService.openLibrary(at: restoredPath)
+                appState.setOpenedLibrary(path: restoredPath, context: openedLibrary)
+                appState.selectedLibraryPath = restoredPath
+            } catch {
+                // Library open failed
+                appState.clearOpenedLibrary(error: "Library no longer accessible: \(error.localizedDescription)")
+                UIPersistenceService.persistLastOpenedLibrary(nil)
+            }
+        }
         .sheet(isPresented: $showCreateWizard) {
             CreateLibraryWizard(onCompletion: handleWizardCompletion)
         }
@@ -180,6 +210,7 @@ struct ContentView: View {
                     await MainActor.run {
                         appState.discoveredLibraries = libraries
                         appState.isDiscovering = false
+                        appState.persistState()
                     }
                 } catch {
                     await MainActor.run {
@@ -219,6 +250,7 @@ struct ContentView: View {
                     do {
                         let openedLibrary = try LibraryStatusService.openLibrary(at: path)
                         appState.setOpenedLibrary(path: path, context: openedLibrary)
+                        appState.persistState()
                     } catch {
                         appState.clearOpenedLibrary(error: "Failed to open library: \(error.localizedDescription)")
                         // Reset status view model to avoid showing stale status
@@ -246,6 +278,7 @@ struct ContentView: View {
             appState.setOpenedLibrary(path: libraryPath, context: openedLibrary)
             appState.selectedLibraryPath = libraryPath
             appState.errorMessage = nil
+            appState.persistState()
         } catch {
             appState.clearOpenedLibrary(error: "Failed to open library: \(error.localizedDescription)")
             appState.errorMessage = "Failed to open library: \(error.localizedDescription)"
