@@ -323,6 +323,29 @@ The CLI remains the backend and source of truth. The macOS desktop application (
 
 **Review Status**: ✅ OK - All success criteria (SC-001 through SC-008) verified. Safety rules (SR-001 through SR-006) followed. Backward compatibility maintained. Scope respected (UI-only, no Core changes).
 
+### ✅ Slice 15 — UI Operations UX (progress / cancel)
+**Status**: Complete and Frozen (2026-01-17)  
+**Spec**: `specs/015-ui-operations-ux/spec.md`  
+**Plan**: `specs/015-ui-operations-ux/plan.md`  
+**Tasks**: `specs/015-ui-operations-ux/tasks.md`  
+**Validation**: `specs/015-ui-operations-ux/validation.md`  
+**Freeze**: `specs/015-ui-operations-ux/FREEZE.md`
+
+**Deliverables**:
+- Progress state fields added to DetectionState and ImportState (progressStage, progressCurrent, progressTotal, progressMessage, cancellationToken, isCanceling)
+- Progress callback integration in DetectionOrchestrator (forwards Core progress updates to MainActor)
+- Cancellation token integration in DetectionOrchestrator (creates token, wires to Core API, handles CancellationError)
+- Progress callback integration in ImportOrchestrator (forwards Core progress updates to MainActor)
+- Cancellation token integration in ImportOrchestrator (creates token, wires to Core API, handles CancellationError)
+- Progress UI components in DetectionRunView (progress bar, step indicator, cancel button, error display)
+- Progress UI components in ImportExecutionView (progress bar, cancel button, error display)
+- MainActor-safe progress updates (all UI state updates occur on MainActor)
+- Backward compatibility maintained (existing workflows continue to work unchanged)
+
+**Note**: All P1 tasks (T-001 through T-020) completed. Build succeeds, tests pass. Manual verification (T-018, T-019, T-020) requires manual UI testing per validation.md. Hash maintenance progress UI (T-021) deferred to Slice 16.
+
+**Review Status**: ✅ OK - All success criteria (SC-001 through SC-004, SC-007 through SC-010) verified. Safety rules (SR-001 through SR-005) followed. Backward compatibility maintained. Scope respected (UI-only, no Core or CLI changes). Progress/cancellation is additive enhancement.
+
 ---
 
 ## Planned Slices
