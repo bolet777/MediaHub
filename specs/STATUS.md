@@ -3,14 +3,14 @@
 **Document Type**: Project Status & Roadmap Tracking  
 **Purpose**: Memory of project state, decisions, and planned slices  
 **Last Updated**: 2026-01-17  
-**Next Review**: After Slice 14a planning or after real-world usage  
+**Next Review**: After completion of manual verification (Slice 14a T-016) or after first real-world usage session  
 **Note**: This is a tracking document, not a normative specification. For authoritative specs, see individual slice specifications in `specs/`.
 
 ---
 
 ## Macro Roadmap
 
-**North Star**: MediaHub provides a reliable, transparent, and scalable media library system that replaces Photos.app for users who need filesystem-first control, deterministic workflows, and long-term maintainability.
+**North Star**: MediaHub provides a reliable, transparent, and scalable media library system that replaces Photos.app for users who need filesystem-first control, deterministic workflows, and long-term maintainability. MediaHub acts as a reliable ingestion and routing hub, supporting both folder-based and device-based media sources (e.g., iPhone, cameras, removable devices), routing media into simple, deterministic filesystem libraries without requiring intermediate library applications.
 
 See README.md for the authoritative North Star and product vision; STATUS.md focuses on execution and slice-level tracking.
 
@@ -20,6 +20,7 @@ See README.md for the authoritative North Star and product vision; STATUS.md foc
 3. **Scalability & Performance**: Support for large libraries, multiple libraries, and long-term usage without degradation
 4. **Content Integrity & Deduplication**: Hash-based duplicate detection and content verification to ensure data safety and prevent accidental duplication
 5. **User Experience & Safety**: Simple workflows with explicit confirmations, dry-run previews, and auditable operations
+6. **Universal Ingestion**: Support for diverse media sources (folders, devices) with a unified detection and routing workflow, enabling direct device-based ingestion without intermediate library applications
 
 **Current Focus**: UI orchestration layer (CLI-first architecture maintained)
 
@@ -129,7 +130,7 @@ The CLI remains the backend and source of truth. The macOS desktop application (
 - Cross-source duplicate detection: Detects duplicates even when files have different paths or names
 
 ### ✅ Slice 9 — Hash Coverage & Maintenance
-**Status**: Complete and validated (2026-01-27)  
+**Status**: Complete and validated (2026-01-17)  
 **Spec**: `specs/009-hash-coverage-maintenance/spec.md`  
 **Validation**: `specs/009-hash-coverage-maintenance/validation.md`
 
@@ -333,6 +334,57 @@ The CLI remains the backend and source of truth. The macOS desktop application (
 | 17 | History / Audit UX + Export Center | Operation timeline (detect/import/maintenance), run details, and export capabilities (JSON/CSV/TXT) | User Experience & Safety, Transparency & Interoperability | Slice 14, Slice 9b | UI | Proposed |
 | 18 | macOS Permissions + Distribution Hardening | Sandbox strategy, notarization, security-scoped bookmarks, and distribution hardening | Reliability & Maintainability | Slice 11+ | UI / Core | Proposed |
 
+---
+
+## Planned Epic — Device Sources (iPhone, Cameras, Removable Devices)
+
+**Status**: Planned (post-Slice 18)  
+**Track**: Core / CLI (CLI-first architecture maintained)  
+**Epic Scope**: High-level product intent and roadmap positioning
+
+### Product Intent
+
+MediaHub's long-term evolution includes direct device-based media ingestion, enabling users to import media directly from devices (e.g., iPhone, cameras, removable storage) without requiring Photos.app or other intermediate library applications as a prerequisite.
+
+**Core Value Proposition**:
+- MediaHub acts as a reliable ingestion and routing hub for diverse media sources
+- Sources may be folders (current) or devices (planned)
+- Media is routed into simple, deterministic filesystem libraries (YYYY/MM organization)
+- Downstream tools (e.g., DigiKam) handle enrichment (tags, faces, places)
+
+### Scope (High-Level)
+
+**In-Scope for First Iterations**:
+- Stable device identity (pairing/recognition)
+- Inventory of device media assets
+- Detection of new vs. already-imported assets
+- Global import ledger (an asset imported once is never re-imported anywhere)
+- Configurable routing (e.g., photos vs. videos to different libraries)
+- Optional user-assisted selection (manual overrides)
+- CLI-first implementation (Core/CLI commands before UI orchestration)
+
+**Out-of-Scope for First Iterations**:
+- UI "wow" features (live preview, screenshots, etc.) — explicitly not core
+- Device-specific metadata extraction beyond basic asset inventory
+- Real-time device monitoring or auto-import triggers
+- Device-specific editing or manipulation capabilities
+
+### Architecture Principles
+
+- **CLI-first**: Device ingestion will be implemented in Core/CLI before UI orchestration
+- **Unified Workflow**: Device sources will integrate with existing detection and import workflows where possible
+- **Global Deduplication**: The existing hash-based duplicate detection system will extend to device sources
+- **Deterministic Routing**: Device media will follow the same YYYY/MM organization and routing rules as folder sources
+
+### Future Documentation
+
+Detailed workflows, device pairing protocols, and implementation specifications will be captured in a future **"Device Ingestion & Routing — Workflow Reference"** document. This document will be created when device ingestion enters active planning (post-Slice 18).
+
+### Roadmap Position
+
+This epic is positioned after Slice 18 (macOS Permissions + Distribution Hardening) as a future Core/CLI epic. It represents a significant scope expansion that affects architecture decisions but does not require immediate implementation or detailed specification at this time.
+
+---
 
 ### Desktop App Track (Macro)
 
@@ -397,7 +449,7 @@ but does not introduce new business logic. UI slices are tracked in the Planned 
 
 ## Out of Scope (Current)
 
-- Photos.app or device-specific integrations
+- Photos.app or device-specific integrations *(Note: Device-based ingestion is planned as a future epic but is out of scope for current slices)*
 - UI-driven business logic (the desktop UI is planned; business logic remains in core/CLI)
 - Metadata enrichment (tags, faces, albums)
 - Pipelines, automation, or scheduling
@@ -415,5 +467,5 @@ but does not introduce new business logic. UI slices are tracked in the Planned 
 ---
 
 **Last Updated**: 2026-01-17  
-**Next Review**: After Slice 14a validation or after real-world usage  
+**Next Review**: After completion of manual verification (Slice 14a T-016) or after first real-world usage session  
 **Note**: Slice 14a completed, frozen, and committed. All P1 tasks (T-001 through T-015) implemented. Manual verification (T-016) pending per validation.md.
