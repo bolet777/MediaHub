@@ -346,6 +346,31 @@ The CLI remains the backend and source of truth. The macOS desktop application (
 
 **Review Status**: ✅ OK - All success criteria (SC-001 through SC-004, SC-007 through SC-010) verified. Safety rules (SR-001 through SR-005) followed. Backward compatibility maintained. Scope respected (UI-only, no Core or CLI changes). Progress/cancellation is additive enhancement.
 
+### 🔄 Slice 16 — UI Hash Maintenance + Coverage
+**Status**: In Progress (T-001 complete, 19 tasks remaining)  
+**Spec**: `specs/016-ui-hash-maintenance-coverage/spec.md`  
+**Plan**: `specs/016-ui-hash-maintenance-coverage/plan.md`  
+**Tasks**: `specs/016-ui-hash-maintenance-coverage/tasks.md`
+
+**Deliverables** (planned):
+- Hash coverage statistics display in library status view
+- Hash maintenance preview UI (shows candidates without computing hashes)
+- Hash maintenance execution UI with progress/cancellation support
+- Hash maintenance batch/limit controls
+- Duplicate detection display UI (read-only view)
+
+**Completed**:
+- ✅ T-001: Hash coverage statistics display in StatusView (Phase 1)
+  - Added HashCoverageInfo struct to LibraryStatus
+  - Updated LibraryStatusService to populate hashCoverage from baseline index
+  - Extended StatusView to display hash coverage percentage, total entries, entries with hash, entries missing hash
+  - Graceful degradation when baseline index missing/invalid (shows "N/A")
+
+**Remaining**:
+- T-002 to T-020: Hash maintenance state/orchestrator, preview/execution views, duplicate detection, UI integration (19 tasks)
+
+**Note**: T-001 completed with scope corrections (LibraryStatus.swift and LibraryStatusService.swift modifications documented in tasks.md). Review report created documenting issues found and corrections made.
+
 ---
 
 ## Planned Slices
@@ -353,7 +378,7 @@ The CLI remains the backend and source of truth. The macOS desktop application (
 | Slice | Title | Goal | Pillar | Depends on | Track | Status |
 |-------|-------|------|--------|------------|-------|--------|
 | 15 | UI Operations UX (progress / cancel) | Progress bars, step indicators, and cancellation UI for detect/import/hash operations | User Experience & Safety | Slice 14 | UI | ✅ Frozen |
-| 16 | UI Hash Maintenance + Coverage | Hash maintenance UI (batch/limit operations) and coverage insights with duplicate detection (read-only) | User Experience & Safety | Slice 9, Slice 14 | UI | Proposed |
+| 16 | UI Hash Maintenance + Coverage | Hash maintenance UI (batch/limit operations) and coverage insights with duplicate detection (read-only) | User Experience & Safety | Slice 9, Slice 14 | UI | In Progress (T-001 complete) |
 | 17 | History / Audit UX + Export Center | Operation timeline (detect/import/maintenance), run details, and export capabilities (JSON/CSV/TXT) | User Experience & Safety, Transparency & Interoperability | Slice 14, Slice 9b | UI | Proposed |
 | 18 | macOS Permissions + Distribution Hardening | Sandbox strategy, notarization, security-scoped bookmarks, and distribution hardening | Reliability & Maintainability | Slice 11+ | UI / Core | Proposed |
 
@@ -490,7 +515,8 @@ but does not introduce new business logic. UI slices are tracked in the Planned 
 ---
 
 **Last Updated**: 2026-01-17  
-**Next Review**: After completion of manual verification (Slice 14a T-016, Slice 15 T-018/T-019/T-020) or after first real-world usage session  
+**Next Review**: After completion of Slice 16 or after first real-world usage session  
 **Note**: 
 - Slice 14a completed, frozen, and committed. All P1 tasks (T-001 through T-015) implemented. Manual verification (T-016) pending per validation.md.
 - Slice 15 completed, frozen, and committed. All P1 tasks (T-001 through T-020) implemented. Manual verification (T-018, T-019, T-020) pending per validation.md. Hash maintenance progress UI (T-021) deferred to Slice 16.
+- Slice 16 in progress. T-001 (hash coverage statistics display) completed and committed. 19 tasks remaining (T-002 through T-020).
