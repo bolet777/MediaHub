@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Slice 16 T-001] - 2026-01-17
+
+### What: Hash Coverage Statistics Display
+
+**Feature**: Display hash coverage statistics in library status view.
+
+**Changes**:
+- Added `HashCoverageInfo` struct to `LibraryStatus` with hash coverage statistics
+- Updated `LibraryStatusService` to populate `hashCoverage` from baseline index
+- Extended `StatusView` to display hash coverage statistics:
+  - Hash coverage percentage (e.g., "75%")
+  - Total entries count
+  - Entries with hash count
+  - Entries missing hash count
+- Graceful degradation: shows "N/A" when baseline index is missing or invalid
+
+**Why**: Provides visibility into hash coverage state, enabling users to understand how many files have hashes and how many are missing hashes. This is foundational for hash maintenance workflows.
+
+**Safety**:
+- **Read-only operation**: Only displays statistics, no mutations
+- **Graceful degradation**: Handles missing/invalid baseline index gracefully
+- **Backward compatible**: Works with all existing libraries (shows N/A if no baseline index)
+- **No Core API changes**: Uses existing Core APIs from Slice 9
+
+**Technical Details**:
+- `HashCoverageInfo` struct added to `LibraryStatus` (totalEntries, entriesWithHash, entriesMissingHash, hashCoverage)
+- `LibraryStatusService.loadStatus` now computes hash coverage from baseline index when available
+- `StatusView` displays hash coverage statistics in library status section
+- Statistics extracted from `BaselineIndex` (entryCount, hashEntryCount, hashCoverage)
+
+**Files Modified**:
+- `Sources/MediaHubUI/LibraryStatus.swift` (added HashCoverageInfo struct and hashCoverage property)
+- `Sources/MediaHubUI/LibraryStatusService.swift` (populate hashCoverage from baseline index)
+- `Sources/MediaHubUI/StatusView.swift` (display hash coverage statistics)
+
+**Files Added**:
+- `specs/016-ui-hash-maintenance-coverage/REVIEW_REPORT.md` (review documentation)
+
+**Note**: This is T-001 of Slice 16. Remaining tasks (T-002 through T-020) will add hash maintenance UI and duplicate detection UI.
+
+---
+
 ## [Slice 13b] - 2026-01-27
 
 ### What: UI Integration & UX Polish
