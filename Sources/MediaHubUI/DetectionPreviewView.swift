@@ -107,7 +107,8 @@ struct DetectionPreviewView: View {
             let result = try await DetectionOrchestrator.runDetection(
                 source: source,
                 libraryRootURL: libraryRootURL,
-                libraryId: libraryId
+                libraryId: libraryId,
+                detectionState: detectionState
             )
             
             // Clear preview sheet before showing run sheet

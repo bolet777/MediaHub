@@ -117,6 +117,7 @@ struct ImportPreviewView: View {
             if let executionResult = importState.executionResult {
                 ImportExecutionView(
                     importResult: executionResult,
+                    importState: importState,
                     onDone: {
                         // Clean up deterministically: clear execution result first
                         importState.executionResult = nil
@@ -146,7 +147,8 @@ struct ImportPreviewView: View {
             let result = try await ImportOrchestrator.executeImport(
                 detectionResult: detectionResult,
                 libraryRootURL: libraryRootURL,
-                libraryId: libraryId
+                libraryId: libraryId,
+                importState: importState
             )
             
             // Present execution sheet first by setting executionResult

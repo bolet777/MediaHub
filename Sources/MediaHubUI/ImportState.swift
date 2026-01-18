@@ -16,4 +16,10 @@ class ImportState: ObservableObject {
     @Published var isExecuting: Bool = false
     @Published var errorMessage: String? = nil
     var detectionResult: DetectionResult? = nil
+    @Published var progressStage: String? = nil
+    @Published var progressCurrent: Int? = nil
+    @Published var progressTotal: Int? = nil
+    @Published var progressMessage: String? = nil
+    var cancellationToken: CancellationToken? = nil
+    @Published var isCanceling: Bool = false
 }

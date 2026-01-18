@@ -27,12 +27,57 @@ struct DetectionRunView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Detection Complete")
-                .font(.headline)
+            // Progress UI (shown when detection is in progress)
+            if detectionState.isRunning {
+                VStack(alignment: .leading, spacing: 8) {
+                    // Step indicator
+                    if let stage = detectionState.progressStage {
+                        Text(stage.capitalized + "...")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    // Progress bar
+                    if let current = detectionState.progressCurrent,
+                       let total = detectionState.progressTotal {
+                        ProgressView(value: Double(current), total: Double(total)) {
+                            if let message = detectionState.progressMessage {
+                                Text(message)
+                                    .font(.caption)
+                            }
+                        }
+                    } else {
+                        ProgressView()
+                    }
+                    
+                    // Cancel button
+                    if let token = detectionState.cancellationToken {
+                        Button(detectionState.isCanceling ? "Canceling..." : "Cancel") {
+                            token.cancel()
+                        }
+                        .disabled(detectionState.isCanceling)
+                    }
+                }
+                .padding()
+            }
             
-            Text("Detection completed successfully")
-                .foregroundColor(.green)
-                .font(.subheadline)
+            // Error message display
+            if let error = detectionState.errorMessage {
+                Text(error)
+                    .foregroundColor(.red)
+                    .font(.caption)
+                    .padding()
+            }
+            
+            // Detection results (shown when detection completes)
+            if !detectionState.isRunning && detectionResult.summary.totalScanned > 0 {
+                Text("Detection Complete")
+                    .font(.headline)
+                
+                Text("Detection completed successfully")
+                    .foregroundColor(.green)
+                    .font(.subheadline)
+            }
             
             VStack(alignment: .leading, spacing: 8) {
                 Text("Detection Statistics")
