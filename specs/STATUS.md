@@ -329,7 +329,7 @@ The CLI remains the backend and source of truth. The macOS desktop application (
 
 | Slice | Title | Goal | Pillar | Depends on | Track | Status |
 |-------|-------|------|--------|------------|-------|--------|
-| 15 | UI Operations UX (progress / cancel) | Progress bars, step indicators, and cancellation UI for detect/import/hash operations | User Experience & Safety | Slice 14 | UI | Proposed |
+| 15 | UI Operations UX (progress / cancel) | Progress bars, step indicators, and cancellation UI for detect/import/hash operations | User Experience & Safety | Slice 14 | UI | ✅ Frozen |
 | 16 | UI Hash Maintenance + Coverage | Hash maintenance UI (batch/limit operations) and coverage insights with duplicate detection (read-only) | User Experience & Safety | Slice 9, Slice 14 | UI | Proposed |
 | 17 | History / Audit UX + Export Center | Operation timeline (detect/import/maintenance), run details, and export capabilities (JSON/CSV/TXT) | User Experience & Safety, Transparency & Interoperability | Slice 14, Slice 9b | UI | Proposed |
 | 18 | macOS Permissions + Distribution Hardening | Sandbox strategy, notarization, security-scoped bookmarks, and distribution hardening | Reliability & Maintainability | Slice 11+ | UI / Core | Proposed |
@@ -467,5 +467,7 @@ but does not introduce new business logic. UI slices are tracked in the Planned 
 ---
 
 **Last Updated**: 2026-01-17  
-**Next Review**: After completion of manual verification (Slice 14a T-016) or after first real-world usage session  
-**Note**: Slice 14a completed, frozen, and committed. All P1 tasks (T-001 through T-015) implemented. Manual verification (T-016) pending per validation.md.
+**Next Review**: After completion of manual verification (Slice 14a T-016, Slice 15 T-018/T-019/T-020) or after first real-world usage session  
+**Note**: 
+- Slice 14a completed, frozen, and committed. All P1 tasks (T-001 through T-015) implemented. Manual verification (T-016) pending per validation.md.
+- Slice 15 completed, frozen, and committed. All P1 tasks (T-001 through T-020) implemented. Manual verification (T-018, T-019, T-020) pending per validation.md. Hash maintenance progress UI (T-021) deferred to Slice 16.
